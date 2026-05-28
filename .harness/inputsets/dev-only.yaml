@@ -1,0 +1,12 @@
+inputSet:
+  name: Dev Only
+  identifier: dev_only
+  orgIdentifier: YOUR_ORG_ID
+  projectIdentifier: YOUR_PROJECT_ID
+  pipeline:
+    identifier: pipeline_controls_exemplar
+    variables:
+      - name: target_envs
+        value: "dev"
+      - name: prod_image_tag
+        value: "IGNORED_DURING_DEV" # Not used since Prod stage is skipped

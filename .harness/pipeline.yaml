@@ -1,0 +1,116 @@
+pipeline:
+  name: Pipeline Controls Exemplar
+  identifier: pipeline_controls_exemplar
+  projectIdentifier: YOUR_PROJECT_ID
+  orgIdentifier: YOUR_ORG_ID
+  tags: {}
+  properties:
+    ci:
+      codebase: null
+  variables:
+    - name: target_envs
+      type: String
+      description: Comma-separated list of target environments to deploy (dev or dev,prod)
+      value: dev
+    - name: prod_image_tag
+      type: String
+      description: Image tag to deploy to Prod (execution-time input)
+      value: <+input>.executionInput()
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: Deploy_to_Dev
+        description: Always runs. Validates artifact in dev.
+        type: Deployment
+        spec:
+          service:
+            useFromStage:
+              stage: Deploy_to_Prod
+          environment:
+            environmentRef: DEV_ENV_ID
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: DEV_INFRA_ID
+          execution:
+            steps:
+              - step:
+                  type: K8sRollingDeploy
+                  name: K8s Rolling Deploy (Dev)
+                  identifier: K8s_Rolling_Deploy_Dev
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: K8s Rolling Rollback (Dev)
+                  identifier: K8s_Rolling_Rollback_Dev
+                  spec: {}
+          artifacts:
+            primary:
+              type: DockerRegistry
+              spec:
+                connectorRef: DOCKER_CONNECTOR
+                imagePath: library/nginx
+                tag: "1.25"
+        tags: {}
+        when:
+          pipelineStatus: All
+    - stage:
+        name: Deploy to Prod
+        identifier: Deploy_to_Prod
+        description: Conditional Prod stage. Pauses for execution-time input (image tag).
+        type: Deployment
+        spec:
+          serviceConfig:
+            service:
+              name: nginx-demo
+              identifier: nginx_demo
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  manifests:
+                    - manifest:
+                        identifier: k8s_deployment
+                        type: K8sManifest
+                        spec:
+                          store:
+                            type: Github
+                            spec:
+                              connectorRef: GIT_CONNECTOR
+                              gitFetchType: Branch
+                              paths:
+                                - k8s/deployment.yaml
+                              repoName: YOUR_REPO_NAME
+                              branch: main
+                          valuesPaths: []
+                  artifacts:
+                    primary:
+                      type: DockerRegistry
+                      spec:
+                        connectorRef: DOCKER_CONNECTOR
+                        imagePath: library/nginx
+                        tag: <+pipeline.variables.prod_image_tag>
+          environment:
+            environmentRef: PROD_ENV_ID
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: PROD_INFRA_ID
+          execution:
+            steps:
+              - step:
+                  type: K8sRollingDeploy
+                  name: K8s Rolling Deploy (Prod)
+                  identifier: K8s_Rolling_Deploy_Prod
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: K8s Rolling Rollback (Prod)
+                  identifier: K8s_Rolling_Rollback_Prod
+                  spec: {}
+        when:
+          pipelineStatus: All
+          condition: <+pipeline.variables.target_envs.contains('prod')>
