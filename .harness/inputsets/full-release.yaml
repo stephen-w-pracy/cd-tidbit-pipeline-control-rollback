@@ -1,12 +1,14 @@
 inputSet:
   name: Full Release
   identifier: full_release
-  orgIdentifier: YOUR_ORG_ID
-  projectIdentifier: YOUR_PROJECT_ID
+  orgIdentifier: <+input>
+  projectIdentifier: <+input>
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:
       - name: target_envs
         value: "dev,prod"
-      - name: prod_image_tag
-        value: <+input>.executionInput() # Prompt at execution time
+      - name: app_version
+        value: <+input>.executionInput()
+      - name: env_color
+        value: "#198754"

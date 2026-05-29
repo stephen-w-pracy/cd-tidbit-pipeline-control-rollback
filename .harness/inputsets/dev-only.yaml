@@ -1,12 +1,14 @@
 inputSet:
   name: Dev Only
   identifier: dev_only
-  orgIdentifier: YOUR_ORG_ID
-  projectIdentifier: YOUR_PROJECT_ID
+  orgIdentifier: <+input>
+  projectIdentifier: <+input>
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:
       - name: target_envs
         value: "dev"
-      - name: prod_image_tag
-        value: "IGNORED_DURING_DEV" # Not used since Prod stage is skipped
+      - name: app_version
+        value: "v1"
+      - name: env_color
+        value: "#0d6efd"

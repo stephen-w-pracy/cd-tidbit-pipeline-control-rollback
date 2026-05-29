@@ -1,4 +1,4 @@
-# Pipeline Controls Exemplar - Build spec (Draft)
+# Pipeline Controls Exemplar - Build Spec (Draft)
 
 This spec describes creating learner instructions, the script of a 10–15 minute
 Tidbits video, and an accompanying, reproducible repo that demonstrates how
@@ -19,74 +19,86 @@ instructions.
 
 ## Documentation Resources
 
-- [Install the Harness Delegate](https://developer.harness.io/docs/platform/tutorials/install-delegate)
-- [Pipeline Infrastructure Setup](https://developer.harness.io/docs/platform/references/pipeline-infra/)
-- [CD Helm Chart Tutorial](https://developer.harness.io/docs/continuous-delivery/get-started/tutorials/kubernetes-container-deployments/helm-chart#delegate)
+- [Install the Harness Delegate](https://developer.harness.io/docs/platform/delegates/install-delegates/overview/)
 - [Harness CD documentation](https://developer.harness.io/docs/continuous-delivery)
+- [Harness CI documentation](https://developer.harness.io/docs/continuous-integration)
+- [Docker Registry Connector](https://developer.harness.io/docs/platform/connectors/cloud-providers/ref-cloud-providers/docker-registry-connector-settings-reference/)
+- [Define Variables](https://developer.harness.io/docs/platform/variables-and-expressions/add-a-variable/#reference-variables)
 
 ## Repo Structure
 
 ```plaintext
-pipeline-controls-exemplar/
+tidbits-pipeline-controls/
 ├── README.md                       # Demo instructions for the learner
-├── .harness/
-│   ├── pipeline.yaml               # Full pipeline with conditionals + exec inputs
-│   └── inputsets/
-│       ├── dev-only.yaml           # Runs Dev only
-│       └── full-release.yaml       # Runs Dev and Prod
+├── app/
+│   ├── server.py                   # Python HTTP server (stdlib only)
+│   └── Dockerfile                  # Container image definition
 ├── k8s/
-│   ├── deployment.yaml             # K8s Deployment with image placeholder
-│   └── service.yaml                # K8s Service (ClusterIP or LoadBalancer)
-└── spec/
+│   ├── deployment.yaml             # K8s Deployment (image from pipeline artifact)
+│   ├── service.yaml                # K8s Service (ClusterIP, port 80 → 8080)
+│   └── configmap.yaml              # HTML page template with Harness expressions
+├── .harness/
+│   ├── pipeline.yaml               # CI/CD pipeline: Build → Dev → Prod
+│   └── inputsets/
+│       ├── dev-only.yaml           # Deploys to Dev only
+│       └── full-release.yaml       # Deploys to Dev and Prod
+├── scripts/
+│   ├── validate-setup.sh           # Pre-flight environment checks
+│   └── teardown.sh                 # Resource cleanup
+└── specs/
     ├── build.md                    # This spec
-    └── video.yaml                  # Script for demo video recording
+    └── video.md                    # Video production script
 ```
 
 ## Design Decisions
 
-- **No custom build.** We use public nginx images so learners don't need CI or a Harness Artifact Registry.
-  - nginx sites should be single HTML pages and a CSS style sheet to visually differentiate v1 vs v2.
-- **Hardcode connectors, environments, and infrastructure** to reduce cognitive load. Only the image tag and a simple env gate remain dynamic.
-- **Keep rollback-focused execution-time input minimal and purposeful** (e.g., confirm a rollback image tag).
+- **CI stage builds a custom image.** A tiny Python HTTP server is containerized. This gives learners a realistic CI/CD flow and enables visual verification (visit the URL, see the page change on rollback).
+- **Same image, different config.** The image is built once in CI. Each environment gets its own ConfigMap with version/environment info baked in via Harness expressions. This is a realistic 12-factor pattern.
+- **Two registry options documented.** GHCR (learner already has GitHub) and Docker Hub (familiar, free tier). Both documented with connector setup steps.
+- **Harness Cloud for CI.** The Build stage uses Harness Cloud infrastructure so learners don't need to set up a build farm.
+- **Visual differentiation via version badge.** A clean HTML page with a version badge and environment name. Dev uses blue accent, Prod uses green. On rollback, the version text reverts — the visual payoff.
 
-## Implementation Overview
+## Pipeline Architecture
 
-1. Create a Kubernetes Connector pointing to your cluster (via Delegate or direct credentials).
-2. Define a Service (K8s manifests from repo), Environment (Dev and Prod), and Infrastructure definitions (same cluster, different namespaces recommended).
-3. Import the provided `pipeline.yaml` and the two Input Sets.
-4. Run a full release to deploy v1 to Dev and Prod.
-5. Run another full release to deploy v2 to Dev and Prod.
-6. Trigger a post-prod rollback from Services → Instances or Executions and observe control behaviors.
+```
+┌─────────┐     ┌──────────────┐     ┌───────────────┐
+│  Build  │────▶│ Deploy to Dev│────▶│ Deploy to Prod│
+│ (always)│     │   (always)   │     │ (conditional) │
+└─────────┘     └──────────────┘     └───────────────┘
+```
+
+- **Build**: Builds `app/Dockerfile`, pushes to learner's registry with `app_version` as the tag
+- **Deploy to Dev**: Applies ConfigMap + rolling deploy to `web-dev` namespace
+- **Deploy to Prod**: Guarded by `target_envs.contains("prod")`. Execution-time input confirms version. Rollback steps configured.
 
 ## Pipeline Controls in This Scenario
 
-| Control               | Where it's used                                                              | Why it matters during rollback                                             |
-| ---                   | ---                                                                          | ---                                                                        |
-| Input Sets            | Select between dev-only and full-release                                     | Not re-applied during rollback; original execution's merged YAML is reused |
-| Execution-time inputs | Rollback step in Prod stage requests a tag confirmation                      | Still pauses the rollback for input if configured on rollback nodes        |
-| Conditional execution | Prod stage guarded by a pipeline variable (e.g., `target_env` includes prod) | Bypassed for non-rollback steps; conditions on rollback steps still apply  |
+| Control               | Where it's used                                                         | Why it matters during rollback                                             |
+| ---                   | ---                                                                     | ---                                                                        |
+| Input Sets            | Select between dev-only and full-release                                | Not re-applied during rollback; original execution's merged YAML is reused |
+| Execution-time inputs | `app_version` prompted at execution time via full-release Input Set     | Still pauses the rollback for input if configured on rollback nodes        |
+| Conditional execution | Prod stage guarded by `target_envs.contains("prod")`                    | Bypassed for non-rollback steps; conditions on rollback steps still apply  |
 
-## Harness variables
+## Pipeline Variables
 
-There are several learner-specific values that must be configured in Harness
-for the pipeline. They are currently represented by hardcoded placholders in
-the input sets and the pipeline YAML. The Pipeline YAML placeholders should
-be replaced with `<+input>` variables that can be defined in the input sets.
-Some of these values will be available at execution time (like the Harness
-account, org, and project identifiers) so those should have the appropriate var
-references e.g. `<+account.identifier>`, but some might need to be manually
-configured, like the learner's git repo connector. 
-See [Define Variables](https://developer.harness.io/docs/platform/variables-and-expressions/add-a-variable/#reference-variables)
-for documentaion on referncing variables in Harness.
+| Variable      | Type   | Default      | Purpose                                               |
+| ---           | ---    | ---          | ---                                                   |
+| `target_envs` | String | `dev`        | Controls which stages run (dev or dev,prod)           |
+| `app_version` | String | `<+input>`   | Version label shown on the page, also used as image tag |
+| `env_color`   | String | `#0d6efd`    | CSS accent color for the environment badge            |
 
-| Placeholder                  | Where it appears          | What to put                                                 |
-| ---                          | ---                       | ---                                                         |
-| YOUR_ORG_ID                  | pipeline.yaml, input sets | Your Harness org identifier                                 |
-| YOUR_PROJECT_ID              | pipeline.yaml, input sets | Your Harness project identifier                             |
-| DEV_ENV_ID / PROD_ENV_ID     | pipeline.yaml             | Existing Environment identifiers                            |
-| DEV_INFRA_ID / PROD_INFRA_ID | pipeline.yaml             | Infrastructure identifiers inside those Environments        |
-| DOCKER_CONNECTOR             | pipeline.yaml             | Docker Registry connector identifier                        |
-| GIT_CONNECTOR                | pipeline.yaml             | Git connector identifier that can fetch k8s/deployment.yaml |
-| YOUR_REPO_NAME               | pipeline.yaml             | Repository name hosting the k8s folder                      |
+## Harness Resources Required
 
+The learner must create these in their Harness project:
 
+| Resource              | Name (suggested)            | Purpose                                      |
+| ---                   | ---                         | ---                                          |
+| Delegate              | `pipeline-controls-delegate`| Runs in K8s cluster, executes pipeline steps |
+| Kubernetes Connector  | `k8s-cluster`               | Points to the learner's cluster via Delegate |
+| Docker Connector      | `container-registry`        | Push/pull images (GHCR or Docker Hub)        |
+| GitHub Connector      | `github`                    | Fetch pipeline YAML and K8s manifests        |
+| Service               | `pipeline-controls-demo`    | K8s service definition with manifests + artifact |
+| Environment (Dev)     | `Dev`                       | Pre-Production, namespace `web-dev`          |
+| Environment (Prod)    | `Prod`                      | Production, namespace `web-prod`             |
+| Infrastructure (Dev)  | (learner's choice)          | K8s infra in Dev env, namespace `web-dev`    |
+| Infrastructure (Prod) | (learner's choice)          | K8s infra in Prod env, namespace `web-prod`  |

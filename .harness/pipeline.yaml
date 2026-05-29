@@ -1,116 +1,164 @@
 pipeline:
   name: Pipeline Controls Exemplar
   identifier: pipeline_controls_exemplar
-  projectIdentifier: YOUR_PROJECT_ID
-  orgIdentifier: YOUR_ORG_ID
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
   tags: {}
-  properties:
-    ci:
-      codebase: null
   variables:
     - name: target_envs
       type: String
-      description: Comma-separated list of target environments to deploy (dev or dev,prod)
+      description: Comma-separated target environments (dev or dev,prod)
       value: dev
-    - name: prod_image_tag
+    - name: app_version
       type: String
-      description: Image tag to deploy to Prod (execution-time input)
-      value: <+input>.executionInput()
+      description: Application version label displayed on the page
+      value: <+input>
+    - name: env_color
+      type: String
+      description: Accent color for the environment badge
+      value: "#0d6efd"
   stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: Builds and pushes the container image.
+        type: CI
+        spec:
+          cloneCodebase: true
+          infrastructure:
+            type: KubernetesHosted
+            spec:
+              identifier: harness_cloud
+          execution:
+            steps:
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push
+                  identifier: Build_and_Push
+                  spec:
+                    connectorRef: <+input>
+                    repo: <+input>
+                    tags:
+                      - <+pipeline.variables.app_version>
+                    dockerfile: app/Dockerfile
+                    context: app
+        when:
+          pipelineStatus: All
+
     - stage:
         name: Deploy to Dev
         identifier: Deploy_to_Dev
-        description: Always runs. Validates artifact in dev.
+        description: Always runs. Deploys the built image to the Dev environment.
         type: Deployment
         spec:
+          deploymentType: Kubernetes
           service:
-            useFromStage:
-              stage: Deploy_to_Prod
-          environment:
-            environmentRef: DEV_ENV_ID
-            deployToAll: false
-            infrastructureDefinitions:
-              - identifier: DEV_INFRA_ID
-          execution:
-            steps:
-              - step:
-                  type: K8sRollingDeploy
-                  name: K8s Rolling Deploy (Dev)
-                  identifier: K8s_Rolling_Deploy_Dev
-                  spec:
-                    skipDryRun: false
-                    pruningEnabled: false
-            rollbackSteps:
-              - step:
-                  type: K8sRollingRollback
-                  name: K8s Rolling Rollback (Dev)
-                  identifier: K8s_Rolling_Rollback_Dev
-                  spec: {}
-          artifacts:
-            primary:
-              type: DockerRegistry
-              spec:
-                connectorRef: DOCKER_CONNECTOR
-                imagePath: library/nginx
-                tag: "1.25"
-        tags: {}
-        when:
-          pipelineStatus: All
-    - stage:
-        name: Deploy to Prod
-        identifier: Deploy_to_Prod
-        description: Conditional Prod stage. Pauses for execution-time input (image tag).
-        type: Deployment
-        spec:
-          serviceConfig:
-            service:
-              name: nginx-demo
-              identifier: nginx_demo
+            serviceRef: <+input>
+            serviceInputs:
               serviceDefinition:
                 type: Kubernetes
                 spec:
-                  manifests:
-                    - manifest:
-                        identifier: k8s_deployment
-                        type: K8sManifest
-                        spec:
-                          store:
-                            type: Github
-                            spec:
-                              connectorRef: GIT_CONNECTOR
-                              gitFetchType: Branch
-                              paths:
-                                - k8s/deployment.yaml
-                              repoName: YOUR_REPO_NAME
-                              branch: main
-                          valuesPaths: []
                   artifacts:
                     primary:
-                      type: DockerRegistry
-                      spec:
-                        connectorRef: DOCKER_CONNECTOR
-                        imagePath: library/nginx
-                        tag: <+pipeline.variables.prod_image_tag>
+                      primaryArtifactRef: <+input>
+                      sources:
+                        - identifier: app_image
+                          type: DockerRegistry
+                          spec:
+                            connectorRef: <+input>
+                            imagePath: <+input>
+                            tag: <+pipeline.variables.app_version>
           environment:
-            environmentRef: PROD_ENV_ID
+            environmentRef: <+input>
             deployToAll: false
             infrastructureDefinitions:
-              - identifier: PROD_INFRA_ID
+              - identifier: <+input>
           execution:
             steps:
               - step:
+                  type: K8sApply
+                  name: Apply ConfigMap
+                  identifier: Apply_ConfigMap
+                  spec:
+                    filePaths:
+                      - k8s/configmap.yaml
+                    skipDryRun: false
+                    skipSteadyStateCheck: true
+                    overrides:
+                      - manifest:
+                          identifier: env_overrides
+                          type: Values
+                          spec:
+                            store:
+                              type: Inline
+                              spec:
+                                content: |
+                                  env_color: "#0d6efd"
+              - step:
                   type: K8sRollingDeploy
-                  name: K8s Rolling Deploy (Prod)
-                  identifier: K8s_Rolling_Deploy_Prod
+                  name: Rolling Deploy
+                  identifier: Rolling_Deploy_Dev
                   spec:
                     skipDryRun: false
                     pruningEnabled: false
             rollbackSteps:
               - step:
                   type: K8sRollingRollback
-                  name: K8s Rolling Rollback (Prod)
-                  identifier: K8s_Rolling_Rollback_Prod
+                  name: Rollback
+                  identifier: Rollback_Dev
                   spec: {}
         when:
           pipelineStatus: All
-          condition: <+pipeline.variables.target_envs.contains('prod')>
+
+    - stage:
+        name: Deploy to Prod
+        identifier: Deploy_to_Prod
+        description: Conditional. Deploys to Prod when target_envs includes "prod". Execution-time input confirms the version.
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            useFromStage:
+              stage: Deploy_to_Dev
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: <+input>
+          execution:
+            steps:
+              - step:
+                  type: K8sApply
+                  name: Apply ConfigMap
+                  identifier: Apply_ConfigMap_Prod
+                  spec:
+                    filePaths:
+                      - k8s/configmap.yaml
+                    skipDryRun: false
+                    skipSteadyStateCheck: true
+                    overrides:
+                      - manifest:
+                          identifier: env_overrides
+                          type: Values
+                          spec:
+                            store:
+                              type: Inline
+                              spec:
+                                content: |
+                                  env_color: "#198754"
+              - step:
+                  type: K8sRollingDeploy
+                  name: Rolling Deploy
+                  identifier: Rolling_Deploy_Prod
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: Rollback
+                  identifier: Rollback_Prod
+                  spec: {}
+        when:
+          pipelineStatus: All
+          condition: <+pipeline.variables.target_envs>.contains("prod")
