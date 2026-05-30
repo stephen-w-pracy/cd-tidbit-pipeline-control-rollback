@@ -1,0 +1,7 @@
+# Values for the Dev environment.
+# Selected automatically when <+env.name> resolves to "Dev".
+# app_version flows from the pipeline variable (see .harness/pipeline.yaml),
+# which is derived from the execution sequence id.
+env_name: Dev
+env_color: "#0d6efd"
+app_version: <+pipeline.variables.app_version>

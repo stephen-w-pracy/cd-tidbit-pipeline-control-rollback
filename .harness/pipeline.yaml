@@ -11,12 +11,11 @@ pipeline:
       value: dev
     - name: app_version
       type: String
-      description: Application version label displayed on the page
-      value: <+input>
-    - name: env_color
-      type: String
-      description: Accent color for the environment badge
-      value: "#0d6efd"
+      description: >-
+        Version label shown on the page and used as the image tag. Derived from
+        the incremental pipeline execution sequence id, so it advances
+        automatically on every run (no manual entry).
+      value: v<+pipeline.sequenceId>
   stages:
     - stage:
         name: Build
@@ -76,25 +75,6 @@ pipeline:
           execution:
             steps:
               - step:
-                  type: K8sApply
-                  name: Apply ConfigMap
-                  identifier: Apply_ConfigMap
-                  spec:
-                    filePaths:
-                      - k8s/configmap.yaml
-                    skipDryRun: false
-                    skipSteadyStateCheck: true
-                    overrides:
-                      - manifest:
-                          identifier: env_overrides
-                          type: Values
-                          spec:
-                            store:
-                              type: Inline
-                              spec:
-                                content: |
-                                  env_color: "#0d6efd"
-              - step:
                   type: K8sRollingDeploy
                   name: Rolling Deploy
                   identifier: Rolling_Deploy_Dev
@@ -113,7 +93,9 @@ pipeline:
     - stage:
         name: Deploy to Prod
         identifier: Deploy_to_Prod
-        description: Conditional. Deploys to Prod when target_envs includes "prod". Execution-time input confirms the version.
+        description: >-
+          Conditional. Deploys to Prod when target_envs includes "prod". Pauses
+          for an execution-time input (prod_confirm) before rolling out.
         type: Deployment
         spec:
           deploymentType: Kubernetes
@@ -128,24 +110,21 @@ pipeline:
           execution:
             steps:
               - step:
-                  type: K8sApply
-                  name: Apply ConfigMap
-                  identifier: Apply_ConfigMap_Prod
+                  type: ShellScript
+                  name: Confirm Prod Release
+                  identifier: Confirm_Prod_Release
                   spec:
-                    filePaths:
-                      - k8s/configmap.yaml
-                    skipDryRun: false
-                    skipSteadyStateCheck: true
-                    overrides:
-                      - manifest:
-                          identifier: env_overrides
-                          type: Values
-                          spec:
-                            store:
-                              type: Inline
-                              spec:
-                                content: |
-                                  env_color: "#198754"
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Prod release confirmed: <+stage.variables.prod_confirm>"
+                          echo "Deploying version <+pipeline.variables.app_version> to <+env.name>"
+                    environmentVariables: []
+                    outputVariables: []
+                  timeout: 1h
               - step:
                   type: K8sRollingDeploy
                   name: Rolling Deploy
@@ -159,6 +138,13 @@ pipeline:
                   name: Rollback
                   identifier: Rollback_Prod
                   spec: {}
+        variables:
+          - name: prod_confirm
+            type: String
+            description: >-
+              Execution-time input. The pipeline pauses here and waits for the
+              operator to confirm the production rollout before it proceeds.
+            value: <+input>.selectOneFrom(approve,hold).executionInput()
         when:
           pipelineStatus: All
           condition: <+pipeline.variables.target_envs>.contains("prod")

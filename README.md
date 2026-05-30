@@ -8,7 +8,7 @@ how pipeline controls behave during a post-production rollback.
 
 - How Input Sets, execution-time inputs, and conditional execution work in a CI/CD pipeline
 - What happens during a post-prod rollback (what is honored vs. bypassed)
-- A minimal, repeatable workflow: build → deploy v1 → deploy v2 → rollback to v1
+- A minimal, repeatable workflow: build → deploy → deploy again → roll back
 
 ## Repository Structure
 
@@ -19,7 +19,9 @@ app/
 k8s/
   deployment.yaml              # Kubernetes Deployment
   service.yaml                 # ClusterIP Service
-  configmap.yaml               # HTML page template (Harness expressions)
+  configmap.yaml               # HTML page template (Go templating)
+  Dev.yaml                     # Values file for the Dev environment
+  Prod.yaml                    # Values file for the Prod environment
 .harness/
   pipeline.yaml                # CI/CD pipeline (Build → Dev → Prod)
   inputsets/
@@ -31,6 +33,7 @@ scripts/
 specs/
   build.md                     # Design spec
   video.md                     # Video production script
+  corrections.md               # Correctness fixes applied to the draft
 ```
 
 ## Prerequisites
@@ -141,27 +144,42 @@ Create two Environments in your Harness project:
 - **Dev** — type: Pre-Production
 - **Prod** — type: Production
 
+> **Environment names matter.** The Service selects its values file by
+> environment name (`<+env.name>.yaml`), so the environments must be named
+> exactly **Dev** and **Prod** to match `k8s/Dev.yaml` and `k8s/Prod.yaml`.
+
 For each Environment, create an Infrastructure Definition:
 - Infrastructure Type: **Kubernetes**
 - Connector: select `k8s-cluster`
 - Namespace: `web-dev` for Dev, `web-prod` for Prod
+- **Release Name**: leave it at the pre-populated default,
+  `release-<+INFRA_KEY_SHORT_ID>`. This gives each environment a unique,
+  stable release name, which Harness needs to track ConfigMap/Secret versions
+  and to roll back correctly. Don't blank this field out.
 
 ### 8. Create a Service in Harness
 
 1. Go to **Services → New Service**
 2. Name: `pipeline-controls-demo`
 3. Deployment Type: **Kubernetes**
-4. Add manifests:
-   - Type: **GitHub**
+4. Add the manifest:
+   - Type: **K8s Manifest** → **GitHub**
    - Connector: `github`
    - Repository: your fork name
    - Branch: `main`
-   - Paths: `k8s/deployment.yaml`, `k8s/service.yaml`, `k8s/configmap.yaml`
+   - Manifest (Files) Paths: `k8s/deployment.yaml`, `k8s/service.yaml`, `k8s/configmap.yaml`
+   - Values YAML Path: `k8s/<+env.name>.yaml`
 5. Add primary artifact:
    - Type: **Docker Registry**
    - Connector: `container-registry`
    - Image Path: your registry path from Step 4 (e.g., `ghcr.io/<user>/pipeline-controls-demo`)
    - Tag: `<+input>`
+
+The ConfigMap is part of the Service manifests (not applied as a separate step),
+so Harness versions it and the rolling deploy and rollback carry it forward and
+back along with the Deployment. The Values YAML path uses `<+env.name>`, so the
+Dev stage picks up `k8s/Dev.yaml` (blue badge) and the Prod stage picks up
+`k8s/Prod.yaml` (green badge) automatically.
 
 ### 9. Import the Pipeline
 
@@ -191,56 +209,74 @@ Alternatively, create a new pipeline via the YAML editor and paste the contents 
 └─────────┘     └──────────────┘     └───────────────┘
 ```
 
-- **Build**: Builds the container image from `app/Dockerfile` and pushes to your registry
-- **Deploy to Dev**: Applies the ConfigMap (with version badge) and rolls out the Deployment
-- **Deploy to Prod**: Only runs if `target_envs` includes `prod`. Uses an execution-time input to confirm the version before deploying
+- **Build**: Builds the container image from `app/Dockerfile` and pushes to your registry, tagged with the version label
+- **Deploy to Dev**: Rolls out the Deployment, Service, and (versioned) ConfigMap to the `web-dev` namespace
+- **Deploy to Prod**: Only runs if `target_envs` includes `prod`. Pauses for an execution-time input (`prod_confirm`) before rolling out to `web-prod`
 
-The same container image is deployed to both environments. The HTML page content (version badge, environment name, accent color) comes from a ConfigMap that Harness templates with pipeline variables.
+The same container image is deployed to both environments. The HTML page content
+comes from a ConfigMap that Harness renders with Go templating. The values
+differ per environment via `k8s/Dev.yaml` and `k8s/Prod.yaml` (selected by
+`<+env.name>`): the environment name and accent color (Dev blue, Prod green).
+
+**Version label.** The version shown on the page and used as the image tag is
+derived automatically from the pipeline's execution sequence id
+(`v<+pipeline.sequenceId>`). It increments by one on every run — there is no
+version to type in. Your first two runs in a fresh project would be `v1` and
+`v2`, but if you've run the pipeline a few times during setup you'll see higher
+numbers (e.g. `v7`, `v8`). That's expected; just note your own numbers as you go.
 
 ---
 
 ## Run the Demo
 
-### Step 1: Deploy v1 to Dev and Prod
+> The version label comes from the execution sequence id, so it advances on
+> each run. Below we call the two releases **vN** and **vN+1** (two consecutive
+> runs). Substitute your actual build numbers.
+
+### Step 1: Deploy vN to Dev and Prod
 
 1. Run the pipeline with the **Full Release** Input Set
-2. When prompted for `app_version`, enter `v1`
-3. Verify both environments are live:
+2. The Build stage runs, then Deploy to Dev. When the Prod stage starts, it
+   **pauses for the `prod_confirm` execution-time input** — select **approve**
+   to continue
+3. Note the version number shown in the run (this is your **vN**)
+4. Verify both environments are live:
    ```bash
    kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
-   # Visit http://localhost:8080 — should show "v1" with a Dev badge
+   # Visit http://localhost:8080 — shows vN with a blue Dev badge
 
    kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
-   # Visit http://localhost:8081 — should show "v1" with a Prod badge
+   # Visit http://localhost:8081 — shows vN with a green Prod badge
    ```
 
-### Step 2: Deploy v2 to Dev and Prod
+### Step 2: Deploy vN+1 to Dev and Prod
 
 1. Run the pipeline again with **Full Release**
-2. Enter `v2` when prompted
-3. Verify v2 is live in both environments (page shows "v2")
+2. Approve the `prod_confirm` input when the Prod stage pauses
+3. Note the new version number (**vN+1**) — this is our "bad" release
+4. Verify vN+1 is live in both environments (page shows the new number)
 
 ### Step 3: (Optional) Dev-Only Run
 
 1. Run with the **Dev Only** Input Set
 2. Observe the Prod stage is skipped due to conditional execution (`target_envs` = `dev`)
-3. This contrasts with rollback behavior where Input Sets are not re-evaluated
+3. This contrasts with rollback behavior, where the original run's resolved YAML is replayed rather than re-evaluating Input Sets
 
 ### Step 4: Trigger a Post-Prod Rollback
 
 1. Go to **Deployments** (or **Services → Instances**)
-2. Find the v2 Prod execution and click **Rollback**
+2. Find the **vN+1** Prod execution and click **Rollback**
 3. Observe what happens:
    - A new execution is created for the rollback
    - Non-rollback steps become pass-through
    - Only the rollback step executes
-   - Input Sets from the original run are baked in (not re-applied)
+   - The original run's resolved YAML is replayed (Input Sets are not re-applied)
 
-### Step 5: Confirm v1 is Restored
+### Step 5: Confirm vN is Restored
 
 ```bash
 kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
-# Visit http://localhost:8081 — should show "v1" again
+# Visit http://localhost:8081 — shows vN again
 ```
 
 ---
@@ -282,11 +318,14 @@ Verify your container registry connector credentials. For GHCR, ensure the PAT h
 **Prod stage never runs**
 Ensure the Input Set sets `target_envs` to include `prod` (e.g., `dev,prod`). You can also override variables at run time in the UI.
 
+**Badge color is the same in both environments**
+Check that your environments are named exactly **Dev** and **Prod** and that the Service's Values YAML path is `k8s/<+env.name>.yaml`. If the name doesn't match a values file, the wrong (or no) values are applied.
+
 **Rollback button not available**
 Only successful executions within the permitted window expose post-prod rollback. Verify your user has rollback permissions for the Prod environment.
 
-**Execution stuck waiting for input**
-Expected if rollback steps include execution-time prompts. Provide the requested value or adjust the rollback step to include a default.
+**Prod stage stuck waiting for input**
+Expected. The Prod stage pauses for the `prod_confirm` execution-time input. Select **approve** to proceed. Note that execution-time inputs have a timeout — if left too long, the run can fail.
 
 **ImagePullBackOff errors**
 Verify the image was pushed successfully during the Build stage. Check that the Kubernetes cluster can reach your registry (GHCR or Docker Hub).

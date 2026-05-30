@@ -1,0 +1,7 @@
+# Values for the Prod environment.
+# Selected automatically when <+env.name> resolves to "Prod".
+# app_version flows from the pipeline variable (see .harness/pipeline.yaml),
+# which is derived from the execution sequence id.
+env_name: Prod
+env_color: "#198754"
+app_version: <+pipeline.variables.app_version>

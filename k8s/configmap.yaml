@@ -37,14 +37,14 @@ data:
           letter-spacing: 0.03em;
           text-transform: uppercase;
           color: #fff;
-          background: <+pipeline.variables.env_color>;
+          background: {{.Values.env_color}};
           margin-bottom: 1.5rem;
         }
         h1 { font-size: 2rem; margin-bottom: 0.5rem; }
         .version {
           font-size: 3rem;
           font-weight: 700;
-          color: <+pipeline.variables.env_color>;
+          color: {{.Values.env_color}};
           margin: 1rem 0;
         }
         .meta { color: #6c757d; font-size: 0.9rem; }
@@ -52,9 +52,9 @@ data:
     </head>
     <body>
       <div class="card">
-        <span class="badge"><+env.name></span>
+        <span class="badge">{{.Values.env_name}}</span>
         <h1>Pipeline Controls Demo</h1>
-        <div class="version"><+pipeline.variables.app_version></div>
+        <div class="version">{{.Values.app_version}}</div>
         <p class="meta">Deployed by Harness CD</p>
       </div>
     </body>

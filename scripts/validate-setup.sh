@@ -8,9 +8,12 @@ PASS=0
 WARN=0
 FAIL=0
 
-pass() { echo "  ✓ $1"; ((PASS++)); }
-warn() { echo "  ⚠ $1"; ((WARN++)); }
-fail() { echo "  ✗ $1"; ((FAIL++)); }
+# Note: under `set -e`, `((VAR++))` returns a non-zero status when the result is
+# 0 (the post-increment evaluates to the old value), which would abort the
+# script. Use arithmetic assignment, which always returns success.
+pass() { echo "  ✓ $1"; PASS=$((PASS + 1)); }
+warn() { echo "  ⚠ $1"; WARN=$((WARN + 1)); }
+fail() { echo "  ✗ $1"; FAIL=$((FAIL + 1)); }
 
 # kubectl
 echo "Checking tools..."
@@ -57,7 +60,7 @@ for f in k8s/deployment.yaml k8s/service.yaml k8s/configmap.yaml; do
     if kubectl apply -f "$f" --dry-run=client -n web-dev &>/dev/null 2>&1; then
       pass "$f is valid"
     else
-      warn "$f has Harness expressions (expected — will be resolved at deploy time)"
+      warn "$f has Harness expressions or Go template syntax (expected — Harness resolves these at deploy time, so a raw kubectl dry-run won't validate)"
     fi
   else
     fail "$f not found"
@@ -68,11 +71,11 @@ done
 echo
 echo "---"
 echo "Results: $PASS passed, $WARN warnings, $FAIL failed"
-if [ $FAIL -gt 0 ]; then
+if [ "$FAIL" -gt 0 ]; then
   echo "Fix the failures above before proceeding."
   exit 1
 fi
-if [ $WARN -gt 0 ]; then
+if [ "$WARN" -gt 0 ]; then
   echo "Warnings are non-blocking but should be addressed."
 fi
 echo "Setup looks good!"
