@@ -6,9 +6,8 @@ inputSet:
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:
+      # Deploys to Dev and Prod. The Prod stage's conditional execution
+      # (target_envs.contains("prod")) evaluates true, so Prod runs and pauses
+      # for the prod_confirm execution-time input.
       - name: target_envs
         value: "dev,prod"
-      - name: app_version
-        value: <+input>.executionInput()
-      - name: env_color
-        value: "#198754"

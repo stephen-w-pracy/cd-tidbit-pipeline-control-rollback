@@ -6,9 +6,7 @@ inputSet:
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:
+      # Deploys to Dev only. The Prod stage's conditional execution
+      # (target_envs.contains("prod")) evaluates false, so Prod is skipped.
       - name: target_envs
         value: "dev"
-      - name: app_version
-        value: "v1"
-      - name: env_color
-        value: "#0d6efd"
