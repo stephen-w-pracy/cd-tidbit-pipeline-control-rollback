@@ -1,9 +1,10 @@
 pipeline:
   name: Pipeline Controls Exemplar
   identifier: pipeline_controls_exemplar
-# These values will be set on import.
-#  projectIdentifier: <+input>
-#  orgIdentifier: <+input>
+  # the Harness vars need to in the YAML if using the Import from Git method
+  # in the Harness UI @todo: create the pipeline using the API instead.
+  projectIdentifier: stephenrollbackcontrols
+  orgIdentifier: default
   tags: {}
   variables:
     - name: target_envs
