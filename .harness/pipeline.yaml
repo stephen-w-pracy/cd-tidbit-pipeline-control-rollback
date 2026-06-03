@@ -12,15 +12,16 @@ pipeline:
     - name: app_version
       type: String
       description: >-
-        Version label shown on the page and used as the image tag. Derived from
-        the incremental pipeline execution sequence id, so it advances
-        automatically on every run (no manual entry).
+        Version label and image tag. Derived from the incremental pipeline
+        execution sequence id (<+pipeline.sequenceId>), so it advances
+        automatically on every run with no manual entry. This is an
+        execution-time value: it does not exist until the run starts.
       value: v<+pipeline.sequenceId>
   stages:
     - stage:
         name: Build
         identifier: Build
-        description: Builds and pushes the container image.
+        description: Builds and pushes the container image, tagged with the sequence id.
         type: CI
         spec:
           cloneCodebase: true
@@ -94,8 +95,8 @@ pipeline:
         name: Deploy to Prod
         identifier: Deploy_to_Prod
         description: >-
-          Conditional. Deploys to Prod when target_envs includes "prod". Pauses
-          for an execution-time input (prod_confirm) before rolling out.
+          Conditional execution. Runs only when target_envs includes "prod"
+          (set via Input Set). Otherwise the stage is skipped.
         type: Deployment
         spec:
           deploymentType: Kubernetes
@@ -110,22 +111,6 @@ pipeline:
           execution:
             steps:
               - step:
-                  type: ShellScript
-                  name: Confirm Prod Release
-                  identifier: Confirm_Prod_Release
-                  spec:
-                    shell: Bash
-                    onDelegate: true
-                    source:
-                      type: Inline
-                      spec:
-                        script: |
-                          echo "Prod release confirmed: <+stage.variables.prod_confirm>"
-                          echo "Deploying version <+pipeline.variables.app_version> to <+env.name>"
-                    environmentVariables: []
-                    outputVariables: []
-                  timeout: 1h
-              - step:
                   type: K8sRollingDeploy
                   name: Rolling Deploy
                   identifier: Rolling_Deploy_Prod
@@ -138,13 +123,6 @@ pipeline:
                   name: Rollback
                   identifier: Rollback_Prod
                   spec: {}
-        variables:
-          - name: prod_confirm
-            type: String
-            description: >-
-              Execution-time input. The pipeline pauses here and waits for the
-              operator to confirm the production rollout before it proceeds.
-            value: <+input>.selectOneFrom(approve,hold).executionInput()
         when:
           pipelineStatus: All
           condition: <+pipeline.variables.target_envs>.contains("prod")

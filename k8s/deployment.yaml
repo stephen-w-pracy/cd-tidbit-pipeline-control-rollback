@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: <+artifact.image>
+          image: <+artifacts.primary.image>
           ports:
             - containerPort: 8080
           volumeMounts:

@@ -1,7 +1,13 @@
 # Values for the Dev environment.
 # Selected automatically when <+env.name> resolves to "Dev".
-# app_version flows from the pipeline variable (see .harness/pipeline.yaml),
-# which is derived from the execution sequence id.
+#
+# image_name and image_tag are read from the artifact the Build (CI) stage
+# produced. These artifact expressions resolve in the CD stage at deploy time —
+# a later stage consuming an earlier stage's output, with no value stored on the
+# build runner. See:
+#   https://developer.harness.io/docs/platform/variables-and-expressions/harness-expressions-reference#service-artifacts-expressions
 env_name: Dev
 env_color: "#0d6efd"
-app_version: <+pipeline.variables.app_version>
+app_version: <+artifacts.primary.tag>
+image_name: <+artifacts.primary.imagePath>
+image_tag: <+artifacts.primary.tag>
