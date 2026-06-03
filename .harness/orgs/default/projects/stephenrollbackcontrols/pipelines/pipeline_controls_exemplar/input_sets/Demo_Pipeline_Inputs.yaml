@@ -1,4 +1,9 @@
 inputSet:
+  name: Demo Pipeline Inputs
+  tags: {}
+  identifier: Demo_Pipeline_Inputs
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
   pipeline:
     identifier: pipeline_controls_exemplar
     stages:
@@ -47,10 +52,6 @@ inputSet:
       ci:
         codebase:
           build:
+            type: branch
             spec:
               branch: simplify-pipeline
-            type: branch
-  name: Demo Pipeline Inputs
-  identifier: Demo_Pipeline_Inputs
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
