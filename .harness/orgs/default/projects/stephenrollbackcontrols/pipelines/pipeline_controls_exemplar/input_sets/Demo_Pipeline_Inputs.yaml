@@ -1,12 +1,11 @@
 inputSet:
   name: Demo Pipeline Inputs
+  tags: {}
   identifier: Demo_Pipeline_Inputs
   orgIdentifier: default
   projectIdentifier: stephenrollbackcontrols
   pipeline:
     identifier: pipeline_controls_exemplar
-    projectIdentifier: stephenrollbackcontrols
-    orgIdentifier: default
     stages:
       - stage:
           identifier: Build
@@ -32,13 +31,14 @@ inputSet:
                   spec:
                     artifacts:
                       primary:
-                        primaryArtifactRef: app_image
                         sources:
                           - identifier: app_image
                             type: DockerRegistry
                             spec:
+                              version: <+pipeline.variables.app_version>
                               connectorRef: stephenwpracyghcr
                               imagePath: ghcr.io/stephen-w-pracy/pipeline-controls-demo
+                        primaryArtifactRef: app_image
             environment:
               environmentRef: Dev
               infrastructureDefinitions:
@@ -51,3 +51,7 @@ inputSet:
               environmentRef: Prod
               infrastructureDefinitions:
                 - identifier: Prod_Infra
+    properties:
+      ci:
+        codebase:
+          build: <+input>
