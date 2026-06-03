@@ -12,7 +12,7 @@ pipeline:
     - name: app_version
       type: String
       description: "Version label and image tag. Derived from the incremental pipeline execution sequence id (<+pipeline.sequenceId>), so it advances automatically on every run with no manual entry. This is an execution-time value: it does not exist until the run starts."
-      value: v<+concat("v" + pipeline.sequenceId)>
+      value: <+concat("v" + pipeline.sequenceId)>
   stages:
     - stage:
         name: Build
