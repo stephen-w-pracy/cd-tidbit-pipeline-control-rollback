@@ -1,0 +1,53 @@
+inputSet:
+  name: Demo Pipeline Inputs
+  identifier: Demo_Pipeline_Inputs
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
+  pipeline:
+    identifier: pipeline_controls_exemplar
+    projectIdentifier: stephenrollbackcontrols
+    orgIdentifier: default
+    stages:
+      - stage:
+          identifier: Build
+          type: CI
+          spec:
+            execution:
+              steps:
+                - step:
+                    identifier: Build_and_Push
+                    type: BuildAndPushDockerRegistry
+                    spec:
+                      connectorRef: stephenwpracyghcr
+                      repo: ghcr.io/stephen-w-pracy/pipeline-controls-demo
+      - stage:
+          identifier: Deploy_to_Dev
+          type: Deployment
+          spec:
+            service:
+              serviceRef: pipelinecontrolsdemo
+              serviceInputs:
+                serviceDefinition:
+                  type: Kubernetes
+                  spec:
+                    artifacts:
+                      primary:
+                        primaryArtifactRef: app_image
+                        sources:
+                          - identifier: app_image
+                            type: DockerRegistry
+                            spec:
+                              connectorRef: stephenwpracyghcr
+                              imagePath: ghcr.io/stephen-w-pracy/pipeline-controls-demo
+            environment:
+              environmentRef: Dev
+              infrastructureDefinitions:
+                - identifier: Dev_Infra
+      - stage:
+          identifier: Deploy_to_Prod
+          type: Deployment
+          spec:
+            environment:
+              environmentRef: Prod
+              infrastructureDefinitions:
+                - identifier: Prod_Infra
