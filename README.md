@@ -1,14 +1,17 @@
 # Pipeline Controls Exemplar — Build, Deploy, Rollback
 
 This repository accompanies a Technical Tidbit video. It provides a reproducible
-demo you can run in your own Harness account and Kubernetes cluster to explore
-how pipeline controls behave during a post-production rollback.
+demo you can run in your own Harness account and Kubernetes cluster to practice
+four Harness pipeline controls in a realistic build → deploy → recover workflow.
 
 ## What You Will Learn
 
-- How Input Sets, execution-time inputs, and conditional execution work in a CI/CD pipeline
-- What happens during a post-prod rollback (what is honored vs. bypassed)
-- A minimal, repeatable workflow: build → deploy → deploy again → roll back
+By the end, you will be able to use four pipeline controls:
+
+1. **Input Sets** — run a pipeline with an Input Set, and switch Input Sets to change what the run does (here: which environments are targeted).
+2. **Execution-time variables** — use values resolved when the run executes rather than authored in advance: the build sequence id as the version/tag, and the image name and tag read in the deploy stage from the artifact the build stage produced.
+3. **Conditional execution** — use a stage condition so a stage runs only when a criterion is met (here: deploy to Prod only when the target list includes `prod`).
+4. **Post-prod rollback** — trigger a post-production rollback and confirm the prior version is restored.
 
 ## Repository Structure
 
@@ -33,7 +36,7 @@ scripts/
 specs/
   build.md                     # Design spec
   video.md                     # Video production script
-  corrections.md               # Correctness fixes applied to the draft
+  corrections.md               # Correctness fixes + decisions
 ```
 
 ## Prerequisites
@@ -51,8 +54,8 @@ specs/
 Fork this repository to your GitHub account, then clone it locally:
 
 ```bash
-git clone https://github.com/<your-username>/tidbits-pipeline-controls.git
-cd tidbits-pipeline-controls
+git clone https://github.com/<your-username>/cd-tidbit-pipeline-control-rollback.git
+cd cd-tidbit-pipeline-control-rollback
 ```
 
 ### 2. Install the Harness Delegate
@@ -86,48 +89,39 @@ In your Harness project:
 
 ### 4. Create a Container Registry Connector
 
-You need a registry to push the built image. Choose one:
+You need a registry to push the built image. The following instructions are 
+for GitHub Container Registry (GHCR), but the steps are similar for other
+registries. See [Conect to an Artifact repository](https://developer.harness.io/docs/platform/connectors/artifact-repositories/connect-to-an-artifact-repo)
+on Harness Developer Hub.
 
-#### Option A: GitHub Container Registry (GHCR)
+#### Create a GitHub Container Registry (GHCR) Connector
 
 1. In GitHub, create a Personal Access Token (classic) with the `write:packages` scope
 2. In Harness, go to **Connectors → New Connector → Docker Registry**
 3. Configure:
-   - Name: `container-registry`
+   - Name: `container-registry` **THIS MIGHT NOT BE NECESSARY**, as you can select GitHub Package Registry directly in the Service artifact configuration and use the GitHub connector. But API access must be enabled.
    - Provider Type: **Other**
    - Docker Registry URL: `https://ghcr.io`
    - Username: your GitHub username
    - Password: create a Harness Secret with your GitHub PAT
+3. Connectivity Mode: **Connect through a Harness Platform**
 4. Test and save
 
 Your image repo path will be: `ghcr.io/<your-username>/pipeline-controls-demo`
 
-#### Option B: Docker Hub
+### 5. Create a GitHub Connector
 
-1. In Docker Hub, create an Access Token at [hub.docker.com/settings/security](https://hub.docker.com/settings/security)
-2. In Harness, go to **Connectors → New Connector → Docker Registry**
-3. Configure:
-   - Name: `container-registry`
-   - Provider Type: **DockerHub**
-   - Docker Registry URL: `https://index.docker.io/v2/`
-   - Username: your Docker Hub username
-   - Password: create a Harness Secret with your Docker Hub access token
-4. Test and save
-
-Your image repo path will be: `<your-dockerhub-username>/pipeline-controls-demo`
-
-### 5. Create a Git Connector
-
-This allows Harness to fetch pipeline YAML and manifests from your fork.
+Harness will pull YAML from your repo's fork, so you'll need to set up a 
+Git connector.
 
 1. Go to **Connectors → New Connector → GitHub**
 2. Configure:
-   - Name: `github`
+   - Name: `pipeline-demo-github`
    - URL Type: **Repository**
    - Connection Type: **HTTP**
-   - GitHub Repository URL: `https://github.com/<your-username>/tidbits-pipeline-controls`
-   - Authentication: **Username and Token** → your GitHub username + PAT (needs `repo` scope)
-3. Connectivity Mode: **Connect through a Harness Delegate**
+   - GitHub Repository URL: `https://github.com/<your-username>/ci-tidbit-pipeline-controls-rollback`
+   - Authentication: Use the Harness secret that you created with your GitHub PAT (the same one used for GHCR)
+3. Connectivity Mode: **Connect through a Harness Platform**
 4. Test and save
 
 ### 6. Create Kubernetes Namespaces
@@ -141,14 +135,20 @@ kubectl create namespace web-prod
 
 Create two Environments in your Harness project:
 
+1. Go to **Environments → New Environment**
+
+1. Create two environments:
+
 - **Dev** — type: Pre-Production
 - **Prod** — type: Production
 
+> [!NOTE] 
 > **Environment names matter.** The Service selects its values file by
 > environment name (`<+env.name>.yaml`), so the environments must be named
 > exactly **Dev** and **Prod** to match `k8s/Dev.yaml` and `k8s/Prod.yaml`.
 
 For each Environment, create an Infrastructure Definition:
+- Name: `Dev_Infra` and `Prod_Infra` 
 - Infrastructure Type: **Kubernetes**
 - Connector: select `k8s-cluster`
 - Namespace: `web-dev` for Dev, `web-prod` for Prod
@@ -165,15 +165,15 @@ For each Environment, create an Infrastructure Definition:
 4. Add the manifest:
    - Type: **K8s Manifest** → **GitHub**
    - Connector: `github`
-   - Repository: your fork name
+   - Manifest Identifier: `pipeline_controls`
    - Branch: `main`
    - Manifest (Files) Paths: `k8s/deployment.yaml`, `k8s/service.yaml`, `k8s/configmap.yaml`
-   - Values YAML Path: `k8s/<+env.name>.yaml`
+   - Values YAML Path: `k8s/<+env.name>.yaml`. Set the field type to `f(x)`.
 5. Add primary artifact:
-   - Type: **Docker Registry**
-   - Connector: `container-registry`
-   - Image Path: your registry path from Step 4 (e.g., `ghcr.io/<user>/pipeline-controls-demo`)
-   - Tag: `<+input>`
+   - Type: **GitHub Package Registry**
+   - Connector: `pipeline-demo-github` **SELECT GitHub Connector**
+   - Package Name:  `pipeline-controls-demo`  **might not need**
+   - Version: `<+input>` **not sure about this**
 
 The ConfigMap is part of the Service manifests (not applied as a separate step),
 so Harness versions it and the rolling deploy and rollback carry it forward and
@@ -184,10 +184,11 @@ Dev stage picks up `k8s/Dev.yaml` (blue badge) and the Prod stage picks up
 ### 9. Import the Pipeline
 
 1. In your project, go to **Pipelines → Create a Pipeline → Import from Git**
-2. Select your `github` connector
-3. Repository: your fork
+1. Select **Third-party Git provider**
+2. Select your `pipeline-demo-github` connector
+3. Repository: `cd-tidbit-pipeline-control-rollback` (your fork)
 4. Branch: `main`
-5. YAML Path: `.harness/pipeline.yaml`
+5. YAML Path: `.harness/pipeline.yaml` **ERrror: OrgIdentifier and projectIdentifier must be in the YAML** Maybe simply deleting them will work.
 6. Save
 
 Alternatively, create a new pipeline via the YAML editor and paste the contents of `.harness/pipeline.yaml`.
@@ -209,14 +210,21 @@ Alternatively, create a new pipeline via the YAML editor and paste the contents 
 └─────────┘     └──────────────┘     └───────────────┘
 ```
 
-- **Build**: Builds the container image from `app/Dockerfile` and pushes to your registry, tagged with the version label
+- **Build**: Builds the container image from `app/Dockerfile` and pushes to your registry, tagged with the version label (`v<+pipeline.sequenceId>`)
 - **Deploy to Dev**: Rolls out the Deployment, Service, and (versioned) ConfigMap to the `web-dev` namespace
-- **Deploy to Prod**: Only runs if `target_envs` includes `prod`. Pauses for an execution-time input (`prod_confirm`) before rolling out to `web-prod`
+- **Deploy to Prod**: Runs only if `target_envs` includes `prod` (conditional execution). Same rolling deploy to the `web-prod` namespace
 
 The same container image is deployed to both environments. The HTML page content
-comes from a ConfigMap that Harness renders with Go templating. The values
-differ per environment via `k8s/Dev.yaml` and `k8s/Prod.yaml` (selected by
+comes from a ConfigMap that Harness renders with Go templating. The values differ
+per environment via `k8s/Dev.yaml` and `k8s/Prod.yaml` (selected by
 `<+env.name>`): the environment name and accent color (Dev blue, Prod green).
+
+**The four controls, in the pipeline:**
+
+- **Input Sets** decide which environments deploy by setting `target_envs` (`dev-only` → `dev`; `full-release` → `dev,prod`).
+- **Execution-time variables** show up twice: the version/tag is `v<+pipeline.sequenceId>` (computed at run start, no typing), and the page displays the running image's name and tag, which the deploy stage reads from the artifact the build stage produced (`<+artifacts.primary.imagePath>` and `<+artifacts.primary.tag>`).
+- **Conditional execution** is the Prod stage's `when` condition, `target_envs.contains("prod")`.
+- **Post-prod rollback** uses the rolling-rollback steps on the deploy stages.
 
 **Version label.** The version shown on the page and used as the image tag is
 derived automatically from the pipeline's execution sequence id
@@ -229,67 +237,69 @@ numbers (e.g. `v7`, `v8`). That's expected; just note your own numbers as you go
 
 ## Run the Demo
 
-> The version label comes from the execution sequence id, so it advances on
-> each run. Below we call the two releases **vN** and **vN+1** (two consecutive
-> runs). Substitute your actual build numbers.
+Each step below exercises one of the four controls. The version label comes from
+the execution sequence id, so it advances on each run. We call the two releases
+**vN** and **vN+1** (two consecutive runs) — substitute your actual build numbers.
 
-### Step 1: Deploy vN to Dev and Prod
+### Step 1 — Input Sets: deploy vN to Dev and Prod
 
-1. Run the pipeline with the **Full Release** Input Set
-2. The Build stage runs, then Deploy to Dev. When the Prod stage starts, it
-   **pauses for the `prod_confirm` execution-time input** — select **approve**
-   to continue
-3. Note the version number shown in the run (this is your **vN**)
+1. Run the pipeline and choose the **Full Release** Input Set. Notice it sets `target_envs` to `dev,prod`.
+2. The run proceeds straight through: Build, then Deploy to Dev, then Deploy to Prod (no prompts).
+3. Note the version number shown in the run (this is your **vN**).
 4. Verify both environments are live:
    ```bash
    kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
-   # Visit http://localhost:8080 — shows vN with a blue Dev badge
+   # Visit http://localhost:8080 — vN, blue Dev badge, and the image name:tag
 
    kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
-   # Visit http://localhost:8081 — shows vN with a green Prod badge
+   # Visit http://localhost:8081 — vN, green Prod badge, same image name:tag
    ```
 
-### Step 2: Deploy vN+1 to Dev and Prod
+The image name and tag on the page come from the artifact the Build stage pushed,
+read back in the deploy stage — your first look at execution-time variables.
 
-1. Run the pipeline again with **Full Release**
-2. Approve the `prod_confirm` input when the Prod stage pauses
-3. Note the new version number (**vN+1**) — this is our "bad" release
-4. Verify vN+1 is live in both environments (page shows the new number)
+### Step 2 — Execution-time variables: deploy vN+1
 
-### Step 3: (Optional) Dev-Only Run
+1. Run the pipeline again with **Full Release**. The version auto-increments — nothing to type.
+2. Note the new version number (**vN+1**). This will be our "bad" release.
+3. Re-check either page: the version *and* the image tag have both advanced to vN+1. These values were computed at execution time — the sequence id at run start, and the artifact tag read downstream into the page.
 
-1. Run with the **Dev Only** Input Set
-2. Observe the Prod stage is skipped due to conditional execution (`target_envs` = `dev`)
-3. This contrasts with rollback behavior, where the original run's resolved YAML is replayed rather than re-evaluating Input Sets
+### Step 3 — Conditional execution: Dev-Only run
 
-### Step 4: Trigger a Post-Prod Rollback
+1. Run with the **Dev Only** Input Set (`target_envs` = `dev`).
+2. Observe the **Prod stage is skipped**: its `when` condition `target_envs.contains("prod")` is false.
+3. Contrast with Steps 1–2, where Full Release made the same condition true and Prod ran.
 
-1. Go to **Deployments** (or **Services → Instances**)
-2. Find the **vN+1** Prod execution and click **Rollback**
-3. Observe what happens:
-   - A new execution is created for the rollback
-   - Non-rollback steps become pass-through
-   - Only the rollback step executes
-   - The original run's resolved YAML is replayed (Input Sets are not re-applied)
+### Step 4 — Post-prod rollback: restore vN
 
-### Step 5: Confirm vN is Restored
+1. Go to **Deployments** (or **Services → Instances**).
+2. Find the **vN+1** Prod deployment and click **Rollback**.
+3. A separate rollback execution runs and completes.
+
+### Step 5 — Confirm vN is restored
 
 ```bash
 kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
-# Visit http://localhost:8081 — shows vN again
+# Visit http://localhost:8081 — shows vN again, with the vN image reference
 ```
 
 ---
 
-## Rollback Behavior — What to Look For
+## Good to Know: What a Post-Prod Rollback Actually Is
 
-| Control | Normal Execution | During Rollback |
-|---------|-----------------|-----------------|
-| Input Sets | Applied at run time, merged into YAML | NOT re-applied; uses original execution's processed YAML |
-| Execution-time inputs | Pauses for user input | Still pauses if configured on rollback steps |
-| Conditional execution | Evaluated on every step | Bypassed on non-rollback steps (pass-through); evaluated on rollback steps |
+A post-prod rollback is **not** a re-run of the pipeline with rollback steps
+switched on. It is a *separate execution* that replays the original run's
+already-resolved YAML and runs only the rollback steps. A couple of consequences
+worth knowing:
 
-**Key insight**: When you roll back, Harness replays the original execution's resolved YAML. The Input Set that selected "dev,prod" is already baked in — it won't be re-evaluated. Only rollback-specific steps actually execute.
+| Control | Normal run | Post-prod rollback |
+|---------|-----------|--------------------|
+| Input Sets | Merged into the YAML at run start | Not re-applied; the original run's resolved YAML is replayed |
+| Conditional execution | Evaluated as the run proceeds | Not re-evaluated; the original resolved outcome is replayed |
+| Execution mode | `<+pipeline.executionMode>` = `NORMAL` | `<+pipeline.executionMode>` = `POST_EXECUTION_ROLLBACK` |
+
+You don't need this to complete the demo — it's background for understanding why
+the prior version comes back cleanly.
 
 ---
 
@@ -316,16 +326,16 @@ kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
 Verify your container registry connector credentials. For GHCR, ensure the PAT has `write:packages` scope. For Docker Hub, ensure the access token is valid.
 
 **Prod stage never runs**
-Ensure the Input Set sets `target_envs` to include `prod` (e.g., `dev,prod`). You can also override variables at run time in the UI.
+Expected with the **Dev Only** Input Set. To deploy Prod, use **Full Release** (or set `target_envs` to include `prod` at run time).
 
 **Badge color is the same in both environments**
 Check that your environments are named exactly **Dev** and **Prod** and that the Service's Values YAML path is `k8s/<+env.name>.yaml`. If the name doesn't match a values file, the wrong (or no) values are applied.
 
+**Image name or tag is blank on the page**
+The page reads `<+artifacts.primary.imagePath>` and `<+artifacts.primary.tag>` from the Service's primary artifact. Confirm the Service has a primary artifact configured and that the run actually built/selected one.
+
 **Rollback button not available**
 Only successful executions within the permitted window expose post-prod rollback. Verify your user has rollback permissions for the Prod environment.
-
-**Prod stage stuck waiting for input**
-Expected. The Prod stage pauses for the `prod_confirm` execution-time input. Select **approve** to proceed. Note that execution-time inputs have a timeout — if left too long, the run can fail.
 
 **ImagePullBackOff errors**
 Verify the image was pushed successfully during the Build stage. Check that the Kubernetes cluster can reach your registry (GHCR or Docker Hub).

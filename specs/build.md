@@ -1,23 +1,52 @@
 # Pipeline Controls Exemplar - Build Spec (Draft)
 
-This spec describes creating learner instructions, the script of a 10–15 minute
-Tidbits video, and an accompanying, reproducible repo that demonstrates how
-pipeline controls behave during a post-production rollback in Harness CD
-NextGen.
+This spec describes the learner instructions, the script of a 10–15 minute
+Tidbits video, and an accompanying, reproducible repo that demonstrates four
+Harness pipeline controls: Input Sets, execution-time variables, conditional
+execution, and post-prod rollback.
 
-Target audience: CD practitioners and learners who want to understand how Input
-Sets, execution-time inputs, and conditional execution interact with post-prod
-rollback.
+Target audience: CD practitioners and learners who want to use these four
+pipeline controls in a realistic build → deploy → recover workflow.
 
 See the [README.md](../README.md) in the repo root for the learner's
 instructions. See [corrections.md](./corrections.md) for the verified
-correctness fixes that have been applied to the original draft.
+correctness fixes and design decisions applied to the original draft.
 
 > [!NOTE]
 > The learner README, this document, and the video script are being brought
-> into parity. The pipeline YAML, manifests, and README reflect the fixes in
-> corrections.md; the video script (video.md) still needs its per-act scripts
-> written.
+> into parity. The pipeline YAML, manifests, README, and this spec reflect the
+> decisions in corrections.md; the video script (video.md) still needs its
+> per-act scripts written.
+
+## Skill Statement and Interpretation
+
+This tidbit covers the intermediate-tier pipeline-controls skill:
+
+> Pipeline Controls: Use Input Sets, execution-time variables, conditional
+> execution, and post-prod rollback.
+
+These are treated as **four coordinate controls** the learner should be able to
+use, demonstrated in the natural order of a deployment lifecycle. Post-prod
+rollback is the fourth control (recover from the run you configured), shown as
+the closing beat — not as a lens for analyzing the other three. The rationale
+(curriculum structure, tier placement) is recorded in `corrections.md` §0.
+
+## Learning Objectives
+
+After completing this tidbit, a learner can:
+
+1. **Input Sets** — Create and run a pipeline with an Input Set, and switch
+   between Input Sets to change what the run does (here: which environments are
+   targeted).
+2. **Execution-time variables** — Use values that are resolved at execution time
+   rather than authored in advance: the build sequence id as a version/tag, and
+   artifact details (image name and tag) read in a later stage from the artifact
+   an earlier stage produced.
+3. **Conditional execution** — Use a stage condition so a stage runs only when a
+   criterion is met (here: deploy to Prod only when the target list includes
+   `prod`).
+4. **Post-prod rollback** — Trigger a post-production rollback and confirm the
+   prior version is restored.
 
 ## Documentation Resources
 
@@ -25,9 +54,12 @@ correctness fixes that have been applied to the original draft.
 - [Harness CD documentation](https://developer.harness.io/docs/continuous-delivery)
 - [Harness CI documentation](https://developer.harness.io/docs/continuous-integration)
 - [Docker Registry Connector](https://developer.harness.io/docs/platform/connectors/cloud-providers/ref-cloud-providers/docker-registry-connector-settings-reference/)
-- [Define Variables](https://developer.harness.io/docs/platform/variables-and-expressions/add-a-variable/#reference-variables)
+- [Input Sets and Overlays](https://developer.harness.io/docs/platform/pipelines/input-sets)
+- [Built-in and artifact expressions](https://developer.harness.io/docs/platform/variables-and-expressions/harness-expressions-reference)
+- [Conditional execution settings](https://developer.harness.io/docs/platform/pipelines/step-skip-condition-settings)
 - [Add and override values YAML files](https://developer.harness.io/docs/continuous-delivery/deploy-srv-diff-platforms/kubernetes/cd-kubernetes-category/add-and-override-values-yaml-files)
 - [Kubernetes releases and versioning](https://developer.harness.io/docs/continuous-delivery/deploy-srv-diff-platforms/kubernetes/cd-k8s-ref/kubernetes-releases-and-versioning)
+- [Post-deployment rollback](https://developer.harness.io/docs/continuous-delivery/manage-deployments/rollback-deployments)
 
 ## Repo Structure
 
@@ -54,19 +86,20 @@ tidbits-pipeline-controls/
 └── specs/
     ├── build.md                    # This spec
     ├── video.md                    # Video production script
-    └── corrections.md              # Verified correctness fixes
+    └── corrections.md              # Verified correctness fixes + decisions
 ```
 
 ## Design Decisions
 
-- **CI stage builds a custom image.** A tiny Python HTTP server is containerized. This gives learners a realistic CI/CD flow and enables visual verification (visit the URL, see the page change on rollback).
+- **CI stage builds a custom image.** A tiny Python HTTP server is containerized. This gives learners a realistic CI/CD flow and enables visual verification (visit the URL, see the page change and revert).
 - **Same image, different config.** The image is built once in CI. The page content comes from a ConfigMap rendered with Go templating; per-environment values (`Dev.yaml`, `Prod.yaml`) supply the environment name and accent color. This is a realistic 12-factor pattern.
 - **ConfigMap is a Service manifest, not a separate Apply step.** Keeping the ConfigMap in the Service's Manifests section means Harness versions it and updates the Deployment's reference to it on each release. As a result, pods roll when content changes, and a rolling rollback reverts the ConfigMap along with the Deployment — which is what makes the visual payoff work.
 - **Per-environment values via `<+env.name>`.** The Service's Values YAML path is `k8s/<+env.name>.yaml`, so the Dev stage uses `Dev.yaml` and the Prod stage uses `Prod.yaml` automatically. This is how the badge color differs per environment.
-- **Version label from the execution sequence id.** `app_version` is `v<+pipeline.sequenceId>`, which increments on each run with no manual entry. More realistic than typed `v1`/`v2`, and it removes a manual prompt from the demo flow.
+- **Execution-time variables, demonstrated without a prompt.** Two naturally-computed values stand in for the control: `v<+pipeline.sequenceId>` (tags the image in CI, becomes the version label) and artifact expressions (`<+artifacts.primary.imagePath>` / `<+artifacts.primary.tag>`) read back in the CD stage and rendered on the page. The latter shows a later stage consuming an earlier stage's artifact. An `executionInput()` prompt was deliberately not used (see corrections.md §5) — it adds on-camera timeout risk and manual typing, and "execution-time variable" is broader than a prompt.
+- **Image name and tag on the page.** Both environments display the running image's name and tag, making the execution-time artifact values visible and concrete.
 - **Two registry options documented.** GHCR (learner already has GitHub) and Docker Hub (familiar, free tier). Both documented with connector setup steps.
 - **Harness Cloud for CI.** The Build stage uses Harness Cloud infrastructure so learners don't need to set up a build farm.
-- **Visual differentiation via version badge.** A clean HTML page with a version badge and environment name. Dev uses blue accent, Prod uses green. On rollback, the version text reverts — the visual payoff.
+- **Visual differentiation via version badge.** A clean HTML page with a version badge, environment name, and image reference. Dev uses blue accent, Prod uses green. On rollback, the version and image revert — the visual payoff.
 
 ## Pipeline Architecture
 
@@ -78,33 +111,47 @@ tidbits-pipeline-controls/
 ```
 
 - **Build**: Builds `app/Dockerfile`, pushes to learner's registry with `app_version` (`v<+pipeline.sequenceId>`) as the tag
-- **Deploy to Dev**: Rolling deploy of the Deployment, Service, and versioned ConfigMap to `web-dev` namespace
-- **Deploy to Prod**: Guarded by `target_envs.contains("prod")`. Pauses for the `prod_confirm` execution-time input before rolling out. Rollback steps configured.
+- **Deploy to Dev**: Rolling deploy of the Deployment, Service, and versioned ConfigMap to `web-dev` namespace; reads artifact name/tag onto the page
+- **Deploy to Prod**: Guarded by `target_envs.contains("prod")` (conditional execution). Same rolling deploy to `web-prod`. Rollback steps configured.
 
 ## Pipeline Controls in This Scenario
 
-| Control               | Where it's used                                                         | Why it matters during rollback                                             |
-| ---                   | ---                                                                     | ---                                                                        |
-| Input Sets            | Select between dev-only and full-release (set `target_envs`)            | Not re-applied during rollback; original execution's merged YAML is reused |
-| Execution-time inputs | `prod_confirm` on the Prod stage, prompted mid-run via `executionInput()` | Still pauses the rollback for input if configured on rollback nodes        |
-| Conditional execution | Prod stage guarded by `target_envs.contains("prod")`                    | Bypassed for non-rollback steps; conditions on rollback steps still apply  |
+| Control                | Where it's used                                                                                  | How the learner sees it                                                  |
+| ---                    | ---                                                                                              | ---                                                                      |
+| Input Sets             | `dev-only` and `full-release` set `target_envs`                                                  | Pick an Input Set at run time; it changes which environments deploy      |
+| Execution-time variables | `v<+pipeline.sequenceId>` (CI tag + version label); `<+artifacts.primary.imagePath>` / `.tag` read in CD | Version auto-increments each run; image name/tag appear on the page      |
+| Conditional execution  | Prod stage `when` condition: `target_envs.contains("prod")`                                       | Prod stage runs with full-release, is skipped with dev-only              |
+| Post-prod rollback     | `K8sRollingRollback` rollback steps on both deploy stages                                         | Trigger rollback from Deployments; page reverts to the prior version     |
+
+### Rollback behavior (brief aside)
+
+A post-prod rollback is a separate execution (mode `POST_EXECUTION_ROLLBACK`)
+that replays the original run's resolved YAML and runs only rollback steps — not
+a re-run with rollback toggled on. Consequently Input Sets are not re-applied and
+conditions are not re-evaluated; the original resolved outcome is replayed. This
+is a good-to-know aside in the video, not the core of the lesson. Details and
+verification status in `corrections.md`.
 
 ## Pipeline Variables
 
-| Variable      | Type   | Default                | Purpose                                                          |
-| ---           | ---    | ---                    | ---                                                              |
-| `target_envs` | String | `dev`                  | Controls which stages run (dev or dev,prod)                      |
-| `app_version` | String | `v<+pipeline.sequenceId>` | Version label shown on the page, also used as image tag; auto-increments |
+| Variable      | Type   | Default                   | Purpose                                                        |
+| ---           | ---    | ---                       | ---                                                            |
+| `target_envs` | String | `dev`                     | Controls which stages run (dev or dev,prod); set by Input Sets |
+| `app_version` | String | `v<+pipeline.sequenceId>` | Version label and image tag; auto-increments per run           |
 
-Per-environment presentation values (environment name, accent color) live in the
-values files `k8s/Dev.yaml` and `k8s/Prod.yaml`, selected by `<+env.name>`, not
-in pipeline variables.
+Per-environment presentation values live in the values files `k8s/Dev.yaml` and
+`k8s/Prod.yaml`, selected by `<+env.name>`:
 
-### Stage Variables
+| Values key   | Dev.yaml                          | Prod.yaml                         | Rendered as                  |
+| ---          | ---                               | ---                               | ---                          |
+| `env_name`   | `Dev`                             | `Prod`                            | Badge text                   |
+| `env_color`  | `#0d6efd` (blue)                  | `#198754` (green)                 | Badge + version color        |
+| `app_version`| `<+artifacts.primary.tag>`        | `<+artifacts.primary.tag>`        | Large version number         |
+| `image_name` | `<+artifacts.primary.imagePath>`  | `<+artifacts.primary.imagePath>`  | Image reference (name)       |
+| `image_tag`  | `<+artifacts.primary.tag>`        | `<+artifacts.primary.tag>`        | Image reference (tag)        |
 
-| Variable       | Stage         | Type   | Value                                              | Purpose                                              |
-| ---            | ---           | ---    | ---                                                | ---                                                  |
-| `prod_confirm` | Deploy to Prod | String | `<+input>.selectOneFrom(approve,hold).executionInput()` | Mid-run confirmation gate before the Prod rollout |
+There are no stage variables; the previous `prod_confirm` execution-time input
+was removed (see corrections.md §5).
 
 ## Harness Resources Required
 
