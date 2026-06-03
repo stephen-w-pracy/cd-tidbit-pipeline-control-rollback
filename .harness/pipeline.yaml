@@ -1,8 +1,9 @@
 pipeline:
   name: Pipeline Controls Exemplar
   identifier: pipeline_controls_exemplar
-  projectIdentifier: <+input>
-  orgIdentifier: <+input>
+# These values will be set on import.
+#  projectIdentifier: <+input>
+#  orgIdentifier: <+input>
   tags: {}
   variables:
     - name: target_envs
