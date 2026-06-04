@@ -6,6 +6,13 @@ inputSet:
   projectIdentifier: stephenrollbackcontrols
   pipeline:
     identifier: pipeline_controls_exemplar
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: main
     stages:
       - stage:
           identifier: Build
@@ -32,13 +39,11 @@ inputSet:
                     artifacts:
                       primary:
                         sources:
-                          - identifier: app_image
-                            type: DockerRegistry
+                          - identifier: GHCR
+                            type: GithubPackageRegistry
                             spec:
                               version: <+pipeline.variables.app_version>
-                              connectorRef: stephenwpracyghcr
-                              imagePath: ghcr.io/stephen-w-pracy/pipeline-controls-demo
-                        primaryArtifactRef: app_image
+                        primaryArtifactRef: GHCR
             environment:
               environmentRef: Dev
               infrastructureDefinitions:
@@ -51,7 +56,4 @@ inputSet:
               environmentRef: Prod
               infrastructureDefinitions:
                 - identifier: Prod_Infra
-    properties:
-      ci:
-        codebase:
-          build: <+input>
+  isInlineHCEntity: false
