@@ -34,16 +34,12 @@ inputSet:
                         primaryArtifactRef: GHCR
             environment:
               environmentRef: Dev
-              infrastructureDefinitions:
-                - identifier: Dev_Infra
       - stage:
           identifier: Deploy_to_Prod
           type: Deployment
           spec:
             environment:
               environmentRef: Prod
-              infrastructureDefinitions:
-                - identifier: Prod_Infra
     properties:
       ci:
         codebase:
