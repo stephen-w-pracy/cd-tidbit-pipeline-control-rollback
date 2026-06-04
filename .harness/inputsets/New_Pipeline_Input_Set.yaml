@@ -24,14 +24,12 @@ inputSet:
                 serviceDefinition:
                   type: Kubernetes
                   spec:
-                    artifacts:
-                      primary:
-                        sources:
-                          - identifier: GHCR
-                            type: GithubPackageRegistry
-                            spec:
-                              version: <+pipeline.variables.app_version>
-                        primaryArtifactRef: GHCR
+                    - name: image
+                      type: String
+                      value: <+pipeline.variables.docker_image>
+                    - name: version
+                      type: String
+                      value: <+pipeline.variables.app_version>
             environment:
               environmentRef: Dev
               infrastructureDefinitions:

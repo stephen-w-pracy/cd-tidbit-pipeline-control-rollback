@@ -13,6 +13,10 @@ pipeline:
       type: String
       description: "Version label and image tag. Derived from the incremental pipeline execution sequence id (<+pipeline.sequenceId>), so it advances automatically on every run with no manual entry. This is an execution-time value: it does not exist until the run starts."
       value: <+"v" + pipeline.sequenceId>
+    - name: docker_image
+      type: String
+      description: "Full image URL without the tag."
+      value: ghcr.io/stephen-w-pracy/pipeline-controls-demo
   stages:
     - stage:
         name: Build
@@ -34,8 +38,8 @@ pipeline:
                   name: Build and Push
                   identifier: Build_and_Push
                   spec:
-                    connectorRef: <+input>
-                    repo: <+input>
+                    connectorRef: stephenwpracyghcr
+                    repo: <+pipeline.variables.docker_image>
                     tags:
                       - <+pipeline.variables.app_version>
                     dockerfile: app/Dockerfile
@@ -50,8 +54,15 @@ pipeline:
         spec:
           deploymentType: Kubernetes
           service:
-            serviceRef: <+input>
-            serviceInputs: <+input>
+            serviceRef: pipelinecontrolsdemo
+            serviceInputs: 
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  variables:
+                    - name: version
+                      type: String
+                      value: <+pipeline.variables.app_version>
           environment:
             environmentRef: <+input>
             deployToAll: false
