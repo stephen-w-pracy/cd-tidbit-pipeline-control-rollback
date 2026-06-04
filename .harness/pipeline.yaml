@@ -54,7 +54,8 @@ pipeline:
             serviceInputs: <+input>
           environment:
             environmentRef: <+input>
-            deployToAll: true
+            deployToAll: false
+            infrastructureDefinitions: <+input>
           execution:
             steps:
               - step:
@@ -90,7 +91,8 @@ pipeline:
               stage: Deploy_to_Dev
           environment:
             environmentRef: <+input>
-            deployToAll: true
+            deployToAll: false
+            infrastructureDefinitions: <+input>
           execution:
             steps:
               - step:
