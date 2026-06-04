@@ -6,13 +6,6 @@ inputSet:
   projectIdentifier: stephenrollbackcontrols
   pipeline:
     identifier: pipeline_controls_exemplar
-    properties:
-      ci:
-        codebase:
-          build:
-            type: branch
-            spec:
-              branch: main
     stages:
       - stage:
           identifier: Build
@@ -46,14 +39,16 @@ inputSet:
                         primaryArtifactRef: GHCR
             environment:
               environmentRef: Dev
-              infrastructureDefinitions:
-                - identifier: Dev_Infra
       - stage:
           identifier: Deploy_to_Prod
           type: Deployment
           spec:
             environment:
               environmentRef: Prod
-              infrastructureDefinitions:
-                - identifier: Prod_Infra
-  isInlineHCEntity: false
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: main
