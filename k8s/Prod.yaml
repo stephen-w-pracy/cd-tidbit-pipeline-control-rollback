@@ -1,9 +1,6 @@
 # Values for the Prod environment.
 # Selected automatically when <+env.name> resolves to "Prod".
-#
-# `app_version` and `image` are defined as runtime serviceVariables in
-# pipeline.yaml, with values provided by input sets.
 env_name: Prod
 env_color: "#198754"
-app_version: <+serviceVariables.version>
+app_version: <+artifact.tag>
 image: <+artifact.image>

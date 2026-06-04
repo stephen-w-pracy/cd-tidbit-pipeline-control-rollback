@@ -1,12 +1,26 @@
 inputSet:
   name: Dev Only
   identifier: dev_only
-  orgIdentifier: <+input>
-  projectIdentifier: <+input>
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:
-      # Deploys to Dev only. The Prod stage's conditional execution
-      # (target_envs.contains("prod")) evaluates false, so Prod is skipped.
       - name: target_envs
         value: "dev"
+    stages:
+      - stage:
+          identifier: Deploy_to_Dev
+          type: Deployment
+          spec:
+            environment:
+              environmentRef: Dev
+              infrastructureDefinitions:
+                - identifier: Dev_Infra
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: main

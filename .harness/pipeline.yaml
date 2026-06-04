@@ -13,10 +13,6 @@ pipeline:
       type: String
       description: "Version label and image tag. Derived from the incremental pipeline execution sequence id (<+pipeline.sequenceId>), so it advances automatically on every run with no manual entry. This is an execution-time value: it does not exist until the run starts."
       value: <+"v" + pipeline.sequenceId>
-    - name: docker_image
-      type: String
-      description: "Full image URL without the tag."
-      value: ghcr.io/stephen-w-pracy/pipeline-controls-demo
   stages:
     - stage:
         name: Build
@@ -39,13 +35,11 @@ pipeline:
                   identifier: Build_and_Push
                   spec:
                     connectorRef: stephenwpracyghcr
-                    repo: <+pipeline.variables.docker_image>
+                    repo: ghcr.io/stephen-w-pracy/pipeline-controls-demo
                     tags:
                       - <+pipeline.variables.app_version>
                     dockerfile: app/Dockerfile
                     context: app
-        when:
-          pipelineStatus: All
     - stage:
         name: Deploy to Dev
         identifier: Deploy_to_Dev
@@ -55,14 +49,18 @@ pipeline:
           deploymentType: Kubernetes
           service:
             serviceRef: pipelinecontrolsdemo
-            serviceInputs: 
+            serviceInputs:
               serviceDefinition:
                 type: Kubernetes
                 spec:
-                  variables:
-                    - name: version
-                      type: String
-                      value: <+pipeline.variables.app_version>
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: pipelinecontrolsdemo
+                      sources:
+                        - identifier: pipelinecontrolsdemo
+                          type: GithubPackageRegistry
+                          spec:
+                            version: <+pipeline.variables.app_version>
           environment:
             environmentRef: <+input>
             deployToAll: false
@@ -88,8 +86,6 @@ pipeline:
                 - AllErrors
               action:
                 type: StageRollback
-        when:
-          pipelineStatus: All
     - stage:
         name: Deploy to Prod
         identifier: Deploy_to_Prod
@@ -98,8 +94,19 @@ pipeline:
         spec:
           deploymentType: Kubernetes
           service:
-            useFromStage:
-              stage: Deploy_to_Dev
+            serviceRef: pipelinecontrolsdemo
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: pipelinecontrolsdemo
+                      sources:
+                        - identifier: pipelinecontrolsdemo
+                          type: GithubPackageRegistry
+                          spec:
+                            version: <+pipeline.variables.app_version>
           environment:
             environmentRef: <+input>
             deployToAll: false
@@ -126,7 +133,7 @@ pipeline:
               action:
                 type: StageRollback
         when:
-          pipelineStatus: All
+          pipelineStatus: Success
           condition: <+pipeline.variables.target_envs>.contains("prod")
   properties:
     ci:
