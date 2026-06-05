@@ -3,6 +3,7 @@ inputSet:
   identifier: dev_only
   orgIdentifier: default
   projectIdentifier: stephenrollbackcontrols
+  tags: {}
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:
@@ -17,6 +18,14 @@ inputSet:
               environmentRef: Dev
               infrastructureDefinitions:
                 - identifier: Dev_Infra
+      - stage:
+          identifier: Deploy_to_Prod
+          type: Deployment
+          spec:
+            environment:
+              environmentRef: Prod
+              infrastructureDefinitions:
+                - identifier: Prod_Infra
     properties:
       ci:
         codebase:

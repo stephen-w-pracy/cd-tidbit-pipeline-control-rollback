@@ -3,6 +3,7 @@ inputSet:
   identifier: full_release
   orgIdentifier: default
   projectIdentifier: stephenrollbackcontrols
+  tags: {}
   pipeline:
     identifier: pipeline_controls_exemplar
     variables:

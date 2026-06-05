@@ -10,14 +10,31 @@ All documentation (README, specs, video script) must stay in parity. See `specs/
 
 ## Architecture
 
+### Application
 - `app/server.py` — Python stdlib HTTP server (~20 lines). Serves HTML from `/app/content/index.html` (mounted ConfigMap) or `PAGE_CONTENT` env var.
 - `app/Dockerfile` — python:3.12-alpine image, exposes port 8080.
-- `k8s/deployment.yaml` — Deployment using `<+artifacts.primary.image>` (Harness expression). Mounts ConfigMap at `/app/content`.
+
+### Kubernetes Manifests (Go-templated, resolved by Harness at deploy time)
+- `k8s/deployment.yaml` — Deployment using `{{.Values.image}}` for the container image. Mounts ConfigMap at `/app/content`.
 - `k8s/service.yaml` — ClusterIP Service (port 80 → 8080).
-- `k8s/configmap.yaml` — HTML page template rendered with **Go templating**. Uses `{{.Values.app_version}}`, `{{.Values.env_name}}`, `{{.Values.env_color}}`, `{{.Values.image_name}}`, `{{.Values.image_tag}}`.
-- `k8s/Dev.yaml`, `k8s/Prod.yaml` — Per-environment values files. Selected by the Service's Values YAML path `k8s/<+env.name>.yaml`. They set `env_name`, `env_color` (Dev blue `#0d6efd`, Prod green `#198754`), and read the artifact details: `app_version` and `image_tag` from `<+artifacts.primary.tag>`, `image_name` from `<+artifacts.primary.imagePath>`.
-- `.harness/pipeline.yaml` — Three-stage pipeline: Build (CI, always) → Deploy to Dev (always) → Deploy to Prod (conditional on `target_envs.contains("prod")`). `app_version` is `v<+pipeline.sequenceId>`, used as the CI image tag. No execution-time *input* prompt — execution-time variables are demonstrated by the sequence id and by artifact expressions read in the deploy stage.
-- `.harness/inputsets/` — `dev-only.yaml` (sets `target_envs: dev`, skips Prod) and `full-release.yaml` (sets `target_envs: dev,prod`). Neither sets a version; that's derived from the sequence id.
+- `k8s/configmap.yaml` — HTML page template rendered with Go templating. Uses `{{.Values.app_version}}`, `{{.Values.env_name}}`, `{{.Values.env_color}}`, `{{.Values.image}}`.
+- `k8s/Dev.yaml`, `k8s/Prod.yaml` — Per-environment values files. Selected by the Service's Values YAML path `k8s/<+env.name>.yaml`. They set `env_name`, `env_color` (Dev blue `#0d6efd`, Prod green `#198754`), and read artifact details: `app_version` from `<+artifact.tag>`, `image` from `<+artifact.image>`.
+
+### Harness Resources (`.harness/`)
+- `pipeline.yaml` — Three-stage pipeline: Build (CI) → Deploy to Dev → Deploy to Prod (conditional on `target_envs.contains("prod")`). `app_version` is `v<+pipeline.sequenceId>`, used as the CI image tag and artifact version. Both deploy stages independently supply `serviceInputs` with the artifact version.
+- `service.yaml` — Kubernetes Service entity. Defines manifest paths (pulled from GitHub), values path `k8s/<+env.name>.yaml`, and a GithubPackageRegistry artifact source with `version: <+input>`. No service variables.
+- `environment-dev.yaml` — Dev environment (PreProduction).
+- `environment-prod.yaml` — Prod environment (Production).
+- `infra-dev.yaml` — Dev_Infra infrastructure definition (KubernetesDirect, namespace `web-dev`).
+- `infra-prod.yaml` — Prod_Infra infrastructure definition (KubernetesDirect, namespace `web-prod`).
+- `connector-github.yaml` — GitHub code connector (Repo type, points at this repo).
+- `connector-ghcr.yaml` — GHCR Docker registry connector (DockerRegistry type).
+- `connector-k8s.yaml` — K8s cluster connector (InheritFromDelegate, selector `helm-delegate`).
+- `ghcr-token-secret.yaml` — Secret reference for the GitHub PAT used by connectors.
+- `inputsets/dev-only.yaml` — Sets `target_envs: dev`, supplies Dev environment/infra. Prod stage skipped.
+- `inputsets/full-release.yaml` — Sets `target_envs: dev,prod`, supplies both environments/infras.
+
+### Supporting Files
 - `scripts/validate-setup.sh` — Pre-flight checks (kubectl, cluster, namespaces, delegate).
 - `scripts/teardown.sh` — Deletes deployed resources from both namespaces.
 - `specs/build.md` — Design spec: skill interpretation, learning objectives, decisions, controls/variables tables, resource table.
@@ -40,11 +57,11 @@ make port-forward-prod # Forward local:8081 to Prod service
 - **Four coordinate controls**: The tidbit demonstrates Input Sets, execution-time variables, conditional execution, and post-prod rollback as four things the learner can *use*, in lifecycle order. Rollback internals are a brief aside, not the spine. (See corrections.md §0.)
 - **Parity**: Changes to README demo steps, pipeline YAML, or video script acts must be reflected across all of them (and in `build.md`).
 - **Same image, different config**: The Docker image is built once. Environments differ only by their values file (`Dev.yaml` / `Prod.yaml`), which drives the ConfigMap content (environment name, accent color, image reference).
-- **Execution-time variables, no prompt**: Demonstrated by `v<+pipeline.sequenceId>` (CI tag + version label) and by artifact expressions (`<+artifacts.primary.imagePath>` / `.tag`) read in the CD stage and shown on the page. `executionInput()` was deliberately dropped (corrections.md §5): it adds on-camera timeout/typing risk, and "execution-time variable" is broader than a prompt.
+- **Execution-time variables, no prompt**: Demonstrated by `v<+pipeline.sequenceId>` (CI tag + version label) and by artifact expressions (`<+artifact.tag>`, `<+artifact.image>`) resolved in the CD stage values files and shown on the page. `executionInput()` was deliberately dropped (corrections.md §5): it adds on-camera timeout/typing risk, and "execution-time variable" is broader than a prompt.
 - **ConfigMap is a Service manifest, versioned by Harness**: It is *not* applied as a separate K8sApply step. Keeping it in the Service Manifests means Harness versions it and rewrites the Deployment's reference each release, so pods roll on change and a rolling rollback reverts it. This is what makes the visual payoff reliable.
-- **Two templating mechanisms, used deliberately**: The Deployment uses the Harness expression `<+artifacts.primary.image>` (resolved in-manifest at deploy time). The ConfigMap uses Go templating `{{.Values.x}}` fed by the per-env values files (which themselves contain Harness expressions). Both are resolved by Harness at deploy time and are *not* valid standalone YAML for `kubectl apply`.
+- **Go templating + Harness expressions**: All K8s manifests use Go templating (`{{.Values.x}}`). The per-env values files contain Harness expressions (`<+artifact.image>`, `<+artifact.tag>`) which Harness resolves before feeding them to the Go template engine. The manifests are *not* valid standalone YAML for `kubectl apply`.
+- **No service variables**: The Service entity has no `variables` block. Display values (`app_version`, `image`) come directly from artifact expressions in the values files, keeping the Service decoupled from any specific pipeline.
 - **Version from sequence id**: `app_version` is `v<+pipeline.sequenceId>` and auto-increments per run; there is no version to type.
 - **Environment names are load-bearing**: Environments must be named `Dev` and `Prod` to match the values file names selected by `<+env.name>`.
 - **Release name**: Infrastructure definitions use `release-<+INFRA_KEY_SHORT_ID>` (the Harness default) so versioning/rollback chains stay intact.
-- **Two registry options**: README documents both GHCR and Docker Hub setup. Pipeline YAML uses `<+input>` for connector/repo so it works with either.
 - **No external dependencies**: The Python server uses stdlib only. No pip install, no requirements.txt.

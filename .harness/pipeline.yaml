@@ -8,7 +8,7 @@ pipeline:
     - name: target_envs
       type: String
       description: Comma-separated target environments (dev or dev,prod)
-      value: dev
+      value: <+input>.default(dev)
     - name: app_version
       type: String
       description: "Version label and image tag. Derived from the incremental pipeline execution sequence id (<+pipeline.sequenceId>), so it advances automatically on every run with no manual entry. This is an execution-time value: it does not exist until the run starts."
@@ -55,7 +55,6 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
-                      primaryArtifactRef: pipelinecontrolsdemo
                       sources:
                         - identifier: pipelinecontrolsdemo
                           type: GithubPackageRegistry
@@ -101,7 +100,6 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
-                      primaryArtifactRef: pipelinecontrolsdemo
                       sources:
                         - identifier: pipelinecontrolsdemo
                           type: GithubPackageRegistry
