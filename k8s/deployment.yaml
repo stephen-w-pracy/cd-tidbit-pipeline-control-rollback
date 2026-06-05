@@ -22,6 +22,8 @@ spec:
           volumeMounts:
             - name: content
               mountPath: /app/content
+      imagePullSecrets:
+        - name: ghcr-cred
       volumes:
         - name: content
           configMap:
