@@ -1,0 +1,13 @@
+infrastructureDefinition:
+  name: Dev_Infra
+  identifier: Dev_Infra
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
+  environmentRef: Dev
+  deploymentType: Kubernetes
+  type: KubernetesDirect
+  spec:
+    connectorRef: k8scluster
+    namespace: web-dev
+    releaseName: release-<+INFRA_KEY_SHORT_ID>
+  allowSimultaneousDeployments: false

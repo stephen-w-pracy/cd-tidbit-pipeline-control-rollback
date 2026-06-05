@@ -1,0 +1,19 @@
+connector:
+  name: stephen-w-pracy-ghcr
+  identifier: stephenwpracyghcr
+  description: ""
+  accountIdentifier: SAn9tg9eRrWyEJyLZ01ibw
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
+  type: DockerRegistry
+  spec:
+    dockerRegistryUrl: https://ghcr.io/stephen-w-pracy
+    providerType: Other
+    auth:
+      type: UsernamePassword
+      spec:
+        username: stephen-w-pracy
+        passwordRef: stephen-w-pracy-ghcr-token
+    executeOnDelegate: false
+    proxy: false
+    ignoreTestConnection: false
