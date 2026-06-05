@@ -1,0 +1,14 @@
+connector:
+  name: k8s-cluster
+  identifier: k8scluster
+  description: ""
+  accountIdentifier: SAn9tg9eRrWyEJyLZ01ibw
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+    delegateSelectors:
+      - helm-delegate
+    ignoreTestConnection: false

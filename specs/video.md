@@ -1,87 +1,173 @@
-# Video Spec and Script (Draft)
+# Video Production Spec
 
-This spec describes the production details and script for a 10–15 minute
-demonstration video. This video will demonstrate the instructions in the root
-directory README.md.
+This spec defines the structure, timing, and shot list for the Technical Tidbit
+video. It is a production reference — what to show, in what order, and how long
+each segment should take.
 
-Parity between the video demonstration and written instructions is important.
+For the narrator's spoken script and step-by-step demonstration actions, see
+[script.md](../script.md) in the repo root.
 
-See the [README.md](../README.md) in the repo root for the learner's
-instructions.
+For the overall demo design, learning objectives, and implementation details,
+see [build.md](./build.md). For verified correctness decisions, see
+[corrections.md](./corrections.md).
 
-See [build.md](./build.md) in this directory for the overall demo design and
-implementation details, and [corrections.md](./corrections.md) for the verified
-fixes that shaped the current pipeline.
+---
 
-> Note on version numbers: the page version is `v<+pipeline.sequenceId>`, which
-> increments every run. In a fresh project the first two runs are v1 and v2; in
-> a project that's already been used for setup runs they'll be higher. The acts
-> below use **vN** and **vN+1** for two consecutive runs — on camera, just read
-> out whatever your actual build numbers are.
+## Format
 
-## Video Demonstration Script and Production Notes
+- **Length:** 10–15 minutes
+- **Style:** Screen recording with voiceover narration
+- **Resolution:** 1920x1080 minimum
+- **Framing:** Four pipeline controls demonstrated in lifecycle order
 
-### Act 1 — Overview and Setup (2–3 min)
+---
 
-- Overview of the demo scenario and what will be covered
-- Walkthrough of setup steps:
-  - Show the Harness Delegate running in the cluster
-  - Show the three connectors (Kubernetes, Container Registry, GitHub)
-  - Show the Service (note: ConfigMap is a Service manifest; Values YAML path is `k8s/<+env.name>.yaml`), Environments (named Dev and Prod), and Infrastructure definitions (release name `release-<+INFRA_KEY_SHORT_ID>`)
-  - Import the pipeline from Git and walk through the structure
-- Highlight the three stages:
-  - **Build** (always runs): builds and pushes the container image, tagged `v<+pipeline.sequenceId>`
-  - **Deploy to Dev** (always runs): rolling deploy of Deployment, Service, and versioned ConfigMap
-  - **Deploy to Prod** (conditional): `target_envs.contains("prod")`, pauses for the `prod_confirm` execution-time input
-- Show the two Input Sets (dev-only and full-release) and that they set `target_envs`
-- Explain the execution-time input (`prod_confirm`) on the Prod stage and how the version label is derived automatically from the sequence id
+## Act Structure
 
-#### Script (TBD)
+| Act | Title | Duration | Controls Demonstrated |
+|-----|-------|----------|----------------------|
+| 1 | Overview and Setup | 2–3 min | (context) |
+| 2 | Input Sets + Conditional Execution | 2–3 min | Input Sets, Conditional execution |
+| 3 | Execution-time Variables | 2–3 min | Execution-time variables |
+| 4 | Full Release + Rollback Setup | 2–3 min | Input Sets (revisited) |
+| 5 | Post-prod Rollback | 2–3 min | Post-prod rollback |
 
-### Act 2 — Deploy vN with Full Release Input Set (2–3 min)
+---
 
-- Run pipeline with the Full Release Input Set
-- Show the Build stage completing (image pushed to registry, tagged with the run's version)
-- Show Deploy to Dev succeed
-- When the Prod stage starts, it pauses for the `prod_confirm` execution-time input — select **approve**
-- Call out the version number for this run (this is **vN**)
-- Visit the Dev URL: page shows vN with blue Dev badge
-- Visit the Prod URL: page shows vN with green Prod badge
+## Act 1 — Overview and Setup
 
-#### Script (TBD)
+**Purpose:** Orient the viewer. Show what exists, set expectations.
 
-### Act 3 — Deploy vN+1 with Full Release Input Set (2–3 min)
+### Shots
 
-- Run pipeline again with Full Release
-- Approve the `prod_confirm` input when the Prod stage pauses
-- Show both environments update; note the new version number (**vN+1**)
-- Visit Prod URL: page now shows vN+1 — this is our "bad" release
+1. **Pipeline Studio** — show the three-stage pipeline (Build → Dev → Prod)
+2. **Service configuration** — manifest paths, values YAML path `k8s/<+env.name>.yaml`, artifact source
+3. **Environments** — Dev (PreProduction) and Prod (Production)
+4. **Infrastructure definitions** — namespaces `web-dev` / `web-prod`, release name default
+5. **Input Sets** — show both: Dev Only (`target_envs: dev`) and Full Release (`target_envs: dev,prod`)
+6. **Connectors** — brief: GitHub, GHCR, K8s cluster
 
-#### Script (TBD)
+### Key Callouts
 
-### Act 4 — Demonstrate Dev-Only Input Set (optional, 1–2 min)
+- The ConfigMap is a Service manifest (versioned by Harness, rolls back with the Deployment)
+- `app_version` is `v<+pipeline.sequenceId>` — first mention of execution-time variables
+- Prod stage has a `when` condition on `target_envs`
+- Two Input Sets control what `target_envs` resolves to
 
-- Run with the Dev Only Input Set
-- Show the Prod stage is skipped due to conditional execution (`target_envs` = `dev`)
-- Point out: the Input Set's value is merged into the pipeline at run start
-- Contrast with rollback behavior, where the original run's resolved YAML is replayed rather than re-evaluating Input Sets
+---
 
-#### Script (TBD)
+## Act 2 — Input Sets + Conditional Execution (Dev Only)
 
-### Act 5 — Post-Prod Rollback (3–4 min)
+**Purpose:** Show Input Sets driving the pipeline, and conditional execution skipping Prod.
 
-- From Deployments or Services → Instances, trigger rollback of the vN+1 Prod deployment
-- Call out what's happening:
-  - Uses the original execution's processed YAML (Input Sets from that run are baked in)
-  - Non-rollback nodes become pass-through; only rollback nodes execute
-  - If a rollback step has execution-time input, the rollout pauses for input
-- Optional proof beats on screen:
-  - `<+pipeline.executionMode>` resolves to `POST_EXECUTION_ROLLBACK` during the rollback
-  - `<+pipeline.originalExecution.sequenceId>` references the original run (resolves only during rollback)
-- Visit Prod URL: page shows vN again — the visual payoff
-- Summarize the three controls and their rollback behavior:
-  - Input Sets: not re-applied
-  - Execution-time inputs: still honored on rollback steps
-  - Conditional execution: bypassed on normal steps, evaluated on rollback steps
+**Pipeline run:** Dev Only input set → produces **v1**
 
-#### Script (TBD)
+### Shots
+
+1. **Run Pipeline dialog** — select Dev Only input set, show `target_envs: dev` populated
+2. **Execution view** — Build completes, Dev deploys, Prod stage shows "Skipped" with condition
+3. **Prod stage detail** — click into it, show the `when` condition evaluation (false)
+4. **Dev app** — port-forward, show the page with blue badge, v1, image URI
+
+### Key Callouts
+
+- The Input Set set `target_envs` to `dev`
+- The Prod stage's `when` condition: `"dev".contains("prod")` → false → skipped
+- Dev deployed successfully with the auto-generated version
+
+---
+
+## Act 3 — Execution-time Variables (Full Release v2)
+
+**Purpose:** Show values computed at execution time — version auto-increments, artifact details appear on the page.
+
+**Pipeline run:** Full Release input set → produces **v2**
+
+### Shots
+
+1. **Run Pipeline dialog** — select Full Release, show `target_envs: dev,prod`
+2. **Build stage** — show the image being tagged with v2 (no manual entry)
+3. **Deploy to Prod — Service step logs** — show artifact version resolving to v2
+4. **Dev app** — show v2, blue badge
+5. **Prod app** — show v2, green badge, same image URI
+
+### Key Callouts
+
+- Version incremented automatically (v1 → v2) — nothing typed
+- The page displays `<+artifact.version>` and `<+artifact.image>` — values resolved at execution time
+- Same image deployed to both environments; only the ConfigMap values differ (color, env name)
+- Prod ran this time because `"dev,prod".contains("prod")` → true
+
+---
+
+## Act 4 — Full Release Again (v3, Rollback Setup)
+
+**Purpose:** Create the second successful Prod deploy (required for rollback).
+
+**Pipeline run:** Full Release input set → produces **v3**
+
+### Shots
+
+1. **Run Pipeline** — brief, no need to re-explain
+2. **Execution completes** — all three stages green
+3. **Prod app** — show v3, green badge
+
+### Key Callouts
+
+- Rollback needs two successful deploys to work — this is the second
+- v3 is the "current" version we'll roll back from
+- Brief: "Now Prod has a history: v2, then v3. Let's recover v2."
+
+---
+
+## Act 5 — Post-prod Rollback
+
+**Purpose:** Demonstrate rollback and the visual payoff.
+
+### Shots
+
+1. **Navigation** — Deployments (global nav) → Services → pipeline-controls-demo
+2. **View Instances and Rollback** — click the button, show the panel with Prod row
+3. **Rollback dialog** — shows current artifact (v3) and rollback target (v2)
+4. **Confirm** — click Confirm
+5. **Rollback execution** — show the execution logs (Initialize, Rollback, Wait for Steady State)
+6. **Prod app** — show v2 restored (green badge, previous version, previous image URI)
+7. **Dev app** — still on v3 (only Prod was rolled back)
+
+### Key Callouts
+
+- Rollback is triggered from the Services panel, not by re-running the pipeline
+- It's a separate execution that replays the original resolved YAML
+- Both the Deployment and ConfigMap reverted (because the ConfigMap is a versioned Service manifest)
+- The version and image on the page went backward — visual proof it worked
+
+### Brief Aside (30 seconds max)
+
+- A post-prod rollback is mode `POST_EXECUTION_ROLLBACK`
+- Input Sets aren't re-applied; conditions aren't re-evaluated
+- The prior release's state is what comes back
+
+---
+
+## Closing (30 seconds)
+
+- Recap: four controls used in one workflow
+  1. Input Sets — chose what deployed
+  2. Execution-time variables — version and artifact details computed at runtime
+  3. Conditional execution — Prod skipped or ran based on the input
+  4. Post-prod rollback — recovered the prior version
+- Point to the README for self-guided practice
+- End card
+
+---
+
+## Production Notes
+
+- **Version numbers:** Use a fresh project or reset the sequence if possible so
+  the video shows v1/v2/v3. If higher numbers appear, that's fine — just read
+  them naturally.
+- **Screenshots for README:** Capture final screenshots during the video recording
+  session (same versions, same state) so README images match the video exactly.
+- **Pauses:** Leave 1–2 seconds of dead air between acts for editing cuts.
+- **Browser tabs:** Pre-open port-forward terminals so the switch to the app page
+  is instant.

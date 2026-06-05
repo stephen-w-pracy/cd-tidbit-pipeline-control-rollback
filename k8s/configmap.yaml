@@ -27,6 +27,7 @@ data:
           border-radius: 12px;
           background: #fff;
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+          max-width: 90vw;
         }
         .badge {
           display: inline-block;
@@ -48,6 +49,23 @@ data:
           margin: 1rem 0;
         }
         .meta { color: #6c757d; font-size: 0.9rem; }
+        .image {
+          margin-top: 1.5rem;
+          padding-top: 1rem;
+          border-top: 1px solid #e9ecef;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 0.8rem;
+          color: #495057;
+          word-break: break-all;
+        }
+        .image .label {
+          display: block;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #adb5bd;
+          margin-bottom: 0.25rem;
+        }
       </style>
     </head>
     <body>
@@ -56,6 +74,9 @@ data:
         <h1>Pipeline Controls Demo</h1>
         <div class="version">{{.Values.app_version}}</div>
         <p class="meta">Deployed by Harness CD</p>
+        <div class="image">
+          <span class="label">Image</span>{{.Values.image}}
+        </div>
       </div>
     </body>
     </html>

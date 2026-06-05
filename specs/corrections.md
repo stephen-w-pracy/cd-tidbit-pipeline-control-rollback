@@ -1,12 +1,42 @@
 # Corrections Spec (Draft)
 
 This document records correctness issues found in the draft repo and the fixes
-to apply before the Tidbit ships. Each item is grounded in the Harness CD
-documentation (paths cited relative to the developer-hub docs tree). Items here
-supersede the current README, `build.md`, and pipeline YAML where they conflict;
-all three must be brought back into parity once these fixes land.
+applied before the Tidbit ships, plus the design decisions that shaped the final
+demo. Each correctness item is grounded in the Harness CD documentation (paths
+cited relative to the developer-hub docs tree). Items here supersede the README,
+`build.md`, and pipeline YAML where they conflict.
 
-Status legend: **Verified** = confirmed against Harness docs.
+Status legend: **Verified** = confirmed against Harness docs; **Decision** =
+design choice recorded for parity.
+
+---
+
+## 0. Framing: four parallel controls, not three-controls-through-rollback — **Decision**
+
+The intermediate skill statement is:
+
+> Pipeline Controls: Use Input Sets, execution-time variables, conditional
+> execution, and post-prod rollback.
+
+This is read as **four coordinate controls the learner should be able to use**,
+demonstrated in the natural order of a deploy-and-recover cycle — not as three
+controls examined through the lens of rollback. Supporting evidence:
+
+- It is one of three pipeline-control skills across the 50-skill curriculum, one
+  per tier. Beginner: "Test manual triggers and runtime inputs." Intermediate
+  (this one). Advanced: "Implement matrix, chained, or looping executions."
+- This is the *only* explicit mention of Input Sets, execution-time variables,
+  and conditional execution in the whole curriculum, so the tidbit's job is to
+  let a learner *use* each one.
+- Deep rollback-interaction behavior (what each control does during a rollback)
+  is advanced systems behavior; if the curriculum wanted it, the advanced tier
+  is where it would sit, and it isn't there.
+
+Consequence: rollback is the closing beat (recover from the run you configured),
+demonstrated as a control in its own right. The "behavior of each control during
+rollback" material is reduced to a brief good-to-know aside, not the spine. The
+learning objectives are therefore four flat "can do X" statements (see
+`build.md`).
 
 ---
 
@@ -20,23 +50,23 @@ both Dev and Prod render the same color.
 
 ### Root cause
 
-`k8s/configmap.yaml` references the color through a Harness *expression*:
+`k8s/configmap.yaml` referenced the color through a Harness *expression*:
 
 ```
 background: <+pipeline.variables.env_color>;
 ```
 
 A Harness expression like this resolves correctly at deploy time (the same
-mechanism that resolves `<+artifact.image>`), so the value is not *invalid* —
-but it resolves to the single pipeline-variable value for the whole run. There
-is only one `env_color` pipeline variable per execution, so Dev and Prod cannot
-differ.
+mechanism that resolves `<+artifacts.primary.image>`), so the value is not
+*invalid* — but it resolves to the single pipeline-variable value for the whole
+run. There is only one `env_color` pipeline variable per execution, so Dev and
+Prod cannot differ.
 
-The draft *attempts* to vary the color with per-stage inline `Values` overrides
+The draft *attempted* to vary the color with per-stage inline `Values` overrides
 on each K8sApply step (`env_overrides` → `env_color: "#0d6efd"` / `"#198754"`).
-Those overrides are never consumed, because the ConfigMap reads a pipeline
+Those overrides were never consumed, because the ConfigMap read a pipeline
 variable, not a values key. The override mechanism and the manifest reference
-are disconnected.
+were disconnected.
 
 ### Why the override doc matters here
 
@@ -49,44 +79,26 @@ Harness draws a clear line between the two mechanisms:
 
 Per-resource variation is the job of **Go templating** (`{{.Values.x}}`) fed by
 a values file, not of a global `<+...>` expression. Harness K8s manifests use
-Go templating (Go template v0.4.5) plus Sprig functions; values files support
-both Go templating and Harness expressions.
+Go templating plus Sprig functions; values files support both Go templating and
+Harness expressions.
 
 > For Kubernetes manifests, the values file uses Go templating to template
 > manifest files.
 >
 > — `continuous-delivery/deploy-srv-diff-platforms/kubernetes/cd-kubernetes-category/add-and-override-values-yaml-files.md`
 
-### Fix
+### Fix (applied)
 
-Change the ConfigMap to use a Go template key for the color (and version — see
-item 4):
-
-```
-background: {{.Values.env_color}};
-```
-
-Supply the value per environment using a values file whose path is keyed on the
-environment name. The override doc documents this exact pattern: commit
-`Dev.yaml` and `Prod.yaml`, and point the Service's values-file path at
-`<+env.name>.yaml`. Harness selects the right file per stage automatically.
+`k8s/configmap.yaml` now uses Go template keys: `{{.Values.env_color}}`,
+`{{.Values.env_name}}`, `{{.Values.app_version}}`, `{{.Values.image_name}}`,
+`{{.Values.image_tag}}`. Per-environment values come from `k8s/Dev.yaml` and
+`k8s/Prod.yaml`, selected by the Service's Values YAML path `k8s/<+env.name>.yaml`.
 
 > You can override the values YAML file for a stage's Environment by mapping the
 > Environment name to the values file or folder. Next, you use the `<+env.name>`
 > Harness expression in the values YAML path.
 >
 > — `add-and-override-values-yaml-files.md`
-
-This keeps the draft's original intent (per-stage color) but wires it through
-the mechanism that actually works.
-
-### Alternatives considered
-
-- Key the badge off `<+env.name>` only (already renders "Dev"/"Prod"
-  correctly) and drop the color story — simplest, but loses the visual contrast.
-- Move `env_color` from a pipeline variable to an **environment** variable and
-  reference `<+env.variables.env_color>` — works, but a values file keyed on
-  `<+env.name>` is more idiomatic and pairs naturally with item 2.
 
 ---
 
@@ -104,7 +116,7 @@ Two related risks to the demo's central payoff:
 
 ### Root cause
 
-The draft applies `configmap.yaml` through a **K8sApply** step, separate from
+The draft applied `configmap.yaml` through a **K8sApply** step, separate from
 the Service manifests deployed by **K8sRollingDeploy**. The Apply step does not
 version ConfigMaps, and has no rollback:
 
@@ -114,15 +126,10 @@ version ConfigMaps, and has no rollback:
 > — `continuous-delivery/deploy-srv-diff-platforms/kubernetes/kubernetes-executions/deploy-manifests-using-apply-step.md`
 
 The same doc's Rolling-vs-Apply table is explicit: the Apply step has **no
-rollback** (Rolling Deployment step: Rollback = Yes; Apply step: Rollback = No).
-So `K8sRollingRollback` reverts the Deployment, but not the Apply-applied
-ConfigMap.
+rollback**. So `K8sRollingRollback` reverts the Deployment, but not the
+Apply-applied ConfigMap.
 
 ### Why default versioning fixes both problems
-
-When a ConfigMap is part of the Service manifests (deployed by the rolling
-step), Harness versions it by default and rewrites the references to it in
-managed workloads:
 
 > By default, all ConfigMaps and Secrets are versioned by Harness. The
 > corresponding references for these ConfigMaps and Secrets in other manifest
@@ -134,23 +141,25 @@ Because the Deployment's ConfigMap reference changes each release, the
 Deployment spec changes, pods roll, and the new page content actually appears.
 Release history is the incrementing series that rollback replays, so reverting
 the release reverts the Deployment's ConfigMap reference along with the image —
-the badge flips back. That is the visual payoff working end to end.
+the badge flips back.
 
-### Fix
+### Fix (applied)
 
-- Remove both K8sApply steps (`Apply_ConfigMap`, `Apply_ConfigMap_Prod`) and
-  their inline `env_overrides`.
-- Add `k8s/configmap.yaml` to the Service's **Manifests** section alongside the
-  Deployment and Service so it is deployed (and versioned) by the rolling step.
-- Let `K8sRollingDeploy` / `K8sRollingRollback` carry the version label and
-  color forward and back.
+- Both K8sApply steps and their inline `env_overrides` removed from the pipeline.
+- `k8s/configmap.yaml` is now part of the Service's **Manifests** section
+  alongside the Deployment and Service, so it is deployed and versioned by the
+  rolling step.
+- `K8sRollingDeploy` / `K8sRollingRollback` carry it forward and back.
 
-### Knock-on README change
+### Related note (declarative rollback)
 
-Currently README Step 8 lists `configmap.yaml` in the Service manifests *and*
-the pipeline applies it via K8sApply — the same resource on two paths. After
-this fix there is a single path (Service manifests), which also removes that
-duplication.
+`kubernetes-rollback.md` documents an alternative — *declarative rollback*
+(`enableDeclarativeRollback: true`) — which hashes ConfigMaps/Secrets onto the
+workload so config-only changes reliably restart pods, for rolling and
+blue/green. This demo uses standard rolling rollback with default versioning,
+which is sufficient because the Deployment's ConfigMap reference changes per
+release. Declarative rollback is noted as a more robust alternative but is not
+required here.
 
 ---
 
@@ -159,7 +168,7 @@ duplication.
 ### Issue
 
 Versioning and rollback chains depend on a unique, stable **Release Name** per
-deployment target. The draft does not mention setting it.
+deployment target.
 
 > Do not change the release name value between deployments... If you change the
 > release name value between deployments, this will reset the versioning number
@@ -167,18 +176,10 @@ deployment target. The draft does not mention setting it.
 >
 > — `kubernetes-releases-and-versioning.md`
 
-### Fix
+### Fix (applied)
 
-In each Infrastructure Definition (Dev and Prod), set **Release Name** to the
-Harness-recommended default:
-
-```
-release-<+INFRA_KEY_SHORT_ID>
-```
-
-`<+INFRA_KEY>` is a hash of `serviceIdentifier-environmentIdentifier-connectorRef-namespace`;
-`<+INFRA_KEY_SHORT_ID>` is the shortened form now pre-populated by Harness in the
-infrastructure **Release Name** field.
+README Step 7 instructs leaving the infra **Release Name** at the pre-populated
+default `release-<+INFRA_KEY_SHORT_ID>`.
 
 > Harness now uses `<+INFRA_KEY_SHORT_ID>` in the default expression that
 > Harness uses to generate a release name... the Release name field... is now
@@ -186,24 +187,23 @@ infrastructure **Release Name** field.
 >
 > — `platform/variables-and-expressions/harness-expressions-reference.md`
 
-Because this demo deploys one service to two namespaces (`web-dev`,
-`web-prod`), the infra key differs per environment, so uniqueness is satisfied
-naturally. Add a one-line note to README setup confirming the field is left at
-its default (don't blank it out).
+This demo deploys one service to two namespaces, so the infra key differs per
+environment and uniqueness is satisfied naturally.
 
 ---
 
-## 4. Replace hard-coded `v1`/`v2` with the execution sequence — **Verified**
+## 4. Version label from the execution sequence id — **Verified**
 
 ### Issue
 
-`app_version` is hand-entered as `v1`/`v2` (dev-only sets `v1`; full-release
-prompts via execution-time input). This makes the learner type the "version,"
-which muddies what's being demonstrated and isn't how real pipelines version.
+The draft hand-entered `app_version` as `v1`/`v2` (dev-only set `v1`;
+full-release prompted via execution-time input). This made the learner type the
+"version," which muddied what was being demonstrated and isn't how real
+pipelines version.
 
-### Fix
+### Fix (applied)
 
-Use the built-in incremental execution counter:
+`app_version` is `v<+pipeline.sequenceId>`.
 
 > `<+pipeline.sequenceId>`: The incremental sequential Id for the execution of a
 > pipeline... The first run of a pipeline receives a sequence Id of 1 and each
@@ -211,81 +211,145 @@ Use the built-in incremental execution counter:
 >
 > — `platform/variables-and-expressions/harness-expressions-reference.md`
 
-Set `app_version` to `<+pipeline.sequenceId>` (or `v<+pipeline.sequenceId>` for
-a nicer badge). The tag and badge then increment automatically per run, with no
-manual entry.
+The tag and badge increment automatically per run, with no manual entry. This
+doubles as the primary demonstration of the **execution-time variable** control:
+the value does not exist until the run starts.
 
 ### Narrative caveat
 
-The script's clean "v1 → v2 → rollback to v1" storyline assumes the first two
-runs are 1 and 2. A learner who ran the pipeline during setup will instead see,
-e.g., `v7`/`v8`. Two options:
-
-- **(Preferred)** Keep `sequenceId` for realism; update the script to say "note
-  your two build numbers; you'll roll back from the higher to the lower."
-- Keep a scripted display label (rename to `release_label`) for narrative
-  cleanliness, but tag the *image* with `sequenceId` so image versioning is
-  still realistic.
-
-### Bonus teaching beats (rollback)
-
-Two verified expressions make good on-screen "proof" moments in Act 5:
-
-- `<+pipeline.executionMode>` resolves to `POST_EXECUTION_ROLLBACK` during a
-  post-prod rollback — a clean way to show you're in a post-prod rollback.
-- `<+pipeline.originalExecution.sequenceId>` references the original run's
-  sequence Id, but **only resolves during a rollback execution**, not normal
-  runs.
-
-Both from `harness-expressions-reference.md`.
+The clean "v1 → v2 → rollback to v1" storyline assumes the first two runs are 1
+and 2. A learner who ran the pipeline during setup will see higher numbers. The
+README and `video.md` use **vN / vN+1** and tell the learner to read their own
+build numbers.
 
 ---
 
-## 5. Execution-time input syntax — **Verified (correct)**
+## 5. Execution-time variables: drop the prompt, use naturally-computed values — **Decision + Verified**
 
-`full-release.yaml` uses `value: <+input>.executionInput()` for `app_version`.
-This is the correct, current syntax.
+### Decision
 
-> When writing pipelines in YAML, append the `executionInput()` method to
-> `<+input>`. For example, `<+input>.executionInput()`.
+The draft demonstrated "execution-time variables" with the narrowest option —
+an `executionInput()` prompt on `app_version`. That was set aside for two
+reasons:
+
+1. "Execution-time variable" is broader than `executionInput()`. It means *any*
+   value resolved at execution time, most of which are not prompts.
+2. A mid-run prompt adds on-camera risk (it has a timeout that can fail the run)
+   and manual typing that muddies the demo.
+
+The control is now demonstrated with **naturally-computed execution-time
+values**, no prompt:
+
+- **`v<+pipeline.sequenceId>`** in the CI stage — tags the image and becomes the
+  version label. Undefined until the run starts.
+- **Artifact expressions read back in the CD stage** — the Dev and Prod values
+  files set `image_name: <+artifacts.primary.imagePath>` and
+  `image_tag: <+artifacts.primary.tag>`, which the ConfigMap renders onto both
+  pages. This shows a later stage consuming the artifact an earlier stage built,
+  without storing anything on the build runner.
+
+### Verification
+
+Artifact expressions are documented for use in values files:
+
+> Use `<+artifacts.primary.image>` or `<+artifacts.primary.imagePath>` in your
+> `values.yaml` file when you want to deploy an artifact you have added to the
+> Artifacts section of a CD stage service definition.
 >
-> — `platform/variables-and-expressions/runtime-input-usage.md`
+> `<+artifacts.primary.imagePath>`: The image name, such as `nginx`.
+> `<+artifacts.primary.tag>`: example value `stable`.
+>
+> — `platform/variables-and-expressions/harness-expressions-reference.md`
+> (Service artifacts expressions)
 
-No syntax change required. However, two behaviors from the same doc affect how
-(and whether) we keep this prompt:
+The same reference confirms `<+pipeline.sequenceId>` and shows the canonical
+pattern of tagging a CI build with it and pulling the same tag in a later stage.
 
-- **Chaining with allowed values / defaults.** Mid-run input can be constrained:
-  `<+input>.allowedValues(v1,v2).executionInput()` or
-  `<+input>.allowedValues(v1,v2).default(v1).executionInput()`. Note
-  `.allowedValues()` is deprecated in favor of `.selectOneFrom()` /
-  `.selectManyFrom()`. Constraining a kept prompt makes the demo more robust.
-- **Mid-run input times out and can fail the run.** Pipelines don't wait
-  indefinitely; if no value is supplied in time, the run fails. A failure
-  strategy (**Execution-time Inputs Timeout Errors** → **Proceed with Default
-  Values**) can fall back to a default. Relevant on camera: a presenter talking
-  through the prompt could hit the timeout mid-demo.
+### Consequence
 
-### Interaction with item 4
-
-Adopting `<+pipeline.sequenceId>` for `app_version` (item 4) removes the
-execution-time prompt for versioning, eliminating both the manual-typing
-awkwardness and the timeout-during-demo risk. But execution-time input is one of
-the four named pipeline controls the Tidbit must demonstrate, so it should not
-vanish entirely. Recommended: keep an explicit, purpose-built execution-time
-input elsewhere (e.g. a "confirm production deploy?" input or approval on the
-Prod stage) rather than overloading the version field. This preserves the
-control in the narrative while decoupling it from versioning.
+- The `prod_confirm` execution-time input and its confirmation step are removed
+  from the Prod stage.
+- `executionInput()` is not used anywhere in the final demo. (Its syntax was
+  verified correct, for the record: `<+input>.executionInput()`, per
+  `runtime-input-usage.md` — but it is not needed.)
+- Conditional execution is still cleanly shown by the Prod stage's `when`
+  condition on `target_envs`; the removed step did not affect it.
 
 ---
 
-## Parity checklist (after fixes land)
+## 6. `validate-setup.sh` arithmetic under `set -e` — **Fixed**
 
-- [ ] `k8s/configmap.yaml` uses `{{.Values.app_version}}` / `{{.Values.env_color}}`
-- [ ] `Dev.yaml` / `Prod.yaml` values files added; Service values path uses `<+env.name>`
-- [ ] Both K8sApply steps removed from `.harness/pipeline.yaml`
-- [ ] `configmap.yaml` listed once, in Service Manifests (README Step 8)
-- [ ] README setup notes Release Name default `release-<+INFRA_KEY_SHORT_ID>`
-- [ ] `app_version` set to `<+pipeline.sequenceId>` (or chosen variant)
-- [ ] README "Run the Demo" and `video.md` Acts updated for build-number narrative
-- [ ] `build.md` Pipeline Controls + Variables tables updated to match
-- [ ] Execution-time input repositioned per item 5 (not overloading version field)
+`((PASS++))` returns a non-zero status when the pre-increment value is 0, which
+under `set -euo pipefail` aborts the script. Replaced with `PASS=$((PASS + 1))`.
+The manifest dry-run warning text was also updated to mention Go templating (not
+just Harness expressions), since the templated manifests won't validate under a
+raw `kubectl --dry-run`.
+
+---
+
+## 7. Deployment used the wrong artifact expression — **Verified + Fixed**
+
+`k8s/deployment.yaml` set the container image to `<+artifact.image>` (singular
+`artifact`, no `.primary`). The documented expression is the plural form with
+the artifact identifier:
+
+> `<+artifacts.primary.image>`: The full location path to the Docker image...
+>
+> — `platform/variables-and-expressions/harness-expressions-reference.md`
+> (Service artifacts expressions)
+
+The singular `<+artifact.image>` is not a documented expression and would likely
+fail to resolve, leaving an invalid image reference. Changed to
+`<+artifacts.primary.image>`, consistent with the values files and the
+deployment-type artifact configuration. (Pre-existing in the draft; not
+introduced by these changes.)
+
+---
+
+## Rollback behavior (brief aside, not the spine) — partially verified
+
+Kept as a short good-to-know in the README/video, no longer the centerpiece. A
+post-prod rollback is a **separate execution** (mode
+`POST_EXECUTION_ROLLBACK`) that replays the original run's resolved YAML and
+runs only rollback steps — it is *not* a re-run with rollback steps toggled on.
+
+Verified from `manage-deployments/rollback-deployments.md` and the expressions
+reference: new execution with its own sequence id; only rollback steps run;
+original execution's processed YAML is the reference; rollback-step expressions
+resolve from the original execution; `<+pipeline.executionMode>` and
+`<+pipeline.originalExecution.*>` (the latter resolves only during rollback).
+
+**Not verified / deliberately not relied upon:** whether an `executionInput()`
+on a rollback node re-prompts during a post-prod rollback. Since the prompt was
+dropped (item 5), the tidbit no longer depends on this claim. If future work
+re-introduces a rollback-node input, this must be confirmed in-product first.
+
+---
+
+## Open verification items (before recording)
+
+These rest on documentation, not an in-product run. Worth a smoke test:
+
+1. **Artifact expressions resolve inside a values file selected by `<+env.name>`**
+   in *this* stage layout (Dev defines the artifact via `serviceInputs`; Prod
+   inherits via `useFromStage`). Documented as supported; not run end-to-end here.
+2. **Standard rolling rollback reverts the ConfigMap content visibly** (pods
+   restart) given default versioning. Mechanism verified from docs; the
+   declarative-rollback note (§2) is the fallback if it doesn't.
+
+---
+
+## Parity checklist
+
+- [x] `k8s/configmap.yaml` uses Go template keys (color, env name, version, image name/tag)
+- [x] `Dev.yaml` / `Prod.yaml` values files added; Service values path uses `<+env.name>`
+- [x] Image name + tag shown on both pages via artifact expressions
+- [x] `k8s/deployment.yaml` uses `<+artifacts.primary.image>`
+- [x] Both K8sApply steps removed from `.harness/pipeline.yaml`
+- [x] `prod_confirm` execution-time input and confirm step removed
+- [x] `app_version` set to `v<+pipeline.sequenceId>`
+- [x] `validate-setup.sh` arithmetic fixed
+- [x] README reflects flat four-control objectives + build-number narrative
+- [x] `build.md` objectives, controls table, variables table updated
+- [x] `video.md` acts updated (no prompt; image-on-page beat; rollback as closing control)
+- [x] `CLAUDE.md` architecture notes updated

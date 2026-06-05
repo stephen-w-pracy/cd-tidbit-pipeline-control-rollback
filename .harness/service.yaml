@@ -1,0 +1,40 @@
+service:
+  name: pipeline-controls-demo
+  identifier: pipelinecontrolsdemo
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
+  serviceDefinition:
+    spec:
+      manifests:
+        - manifest:
+            identifier: pipeline_controls
+            type: K8sManifest
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: github
+                  gitFetchType: Branch
+                  paths:
+                    - k8s/deployment.yaml
+                    - k8s/service.yaml
+                    - k8s/configmap.yaml
+                  branch: main
+              valuesPaths:
+                - k8s/<+env.name>.yaml
+              skipResourceVersioning: false
+              enableDeclarativeRollback: false
+      artifacts:
+        primary:
+          primaryArtifactRef: pipelinecontrolsdemo
+          sources:
+            - identifier: pipelinecontrolsdemo
+              spec:
+                connectorRef: github
+                packageName: pipeline-controls-demo
+                packageType: container
+                version: <+input>
+                digest: ""
+                org: ""
+              type: GithubPackageRegistry
+    type: Kubernetes

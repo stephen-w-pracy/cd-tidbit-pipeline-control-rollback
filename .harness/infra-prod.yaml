@@ -1,0 +1,13 @@
+infrastructureDefinition:
+  name: Prod_Infra
+  identifier: Prod_Infra
+  orgIdentifier: default
+  projectIdentifier: stephenrollbackcontrols
+  environmentRef: Prod
+  deploymentType: Kubernetes
+  type: KubernetesDirect
+  spec:
+    connectorRef: k8scluster
+    namespace: web-prod
+    releaseName: release-<+INFRA_KEY_SHORT_ID>
+  allowSimultaneousDeployments: false

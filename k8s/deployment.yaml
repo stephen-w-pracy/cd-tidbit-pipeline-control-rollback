@@ -16,12 +16,14 @@ spec:
     spec:
       containers:
         - name: web
-          image: <+artifact.image>
+          image: {{.Values.image}}
           ports:
             - containerPort: 8080
           volumeMounts:
             - name: content
               mountPath: /app/content
+      imagePullSecrets:
+        - name: ghcr-cred
       volumes:
         - name: content
           configMap:
