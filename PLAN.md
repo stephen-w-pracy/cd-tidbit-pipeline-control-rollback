@@ -1,0 +1,89 @@
+# Plan: Learner Setup Automation Script
+
+## Context
+
+The tutorial requires ~15 manual Harness setup steps (connectors, secret,
+service, environments, infra, pipeline, input sets) plus cluster prep and
+delegate install. This is error-prone and slow for learners. Goal: a single
+`scripts/setup.sh` that reads a small `.env` and provisions everything — Harness
+resources via the NG REST API, cluster resources via kubectl, and the delegate
+via helm.
+
+Decisions:
+- Templatize `.harness/` in place (single source of truth; rendered before API calls)
+- Full scope: Harness API + cluster (namespaces, imagePullSecret) + delegate (helm)
+- Create the project optionally (`CREATE_PROJECT` toggle for learners without project-create permission)
+
+## Status
+
+### Done
+
+- **Identifier normalization** — `stephenwpracyghcr` → `ghcr`, `stephen-w-pracy-ghcr-token` → `ghcr_token`; all cross-references updated in `pipeline.yaml`, `service.yaml`, `connector-*.yaml`.
+- **Templatized all `.harness/` YAML** with `${VAR}` placeholders. Render-tested: placeholders resolve, Harness `<+...>` expressions preserved, no stray `${...}` in any rendered file.
+- **`.env.example`** created with `CREATE_PROJECT` toggle (handles the project-permission case).
+- **`scripts/setup.sh`** written and syntax-checked. Flow: deps check → project (optional) → namespaces + `ghcr-cred` secret → delegate (Helm) → secret/connectors/service/envs/infra/pipeline/input-sets via API. Idempotent `upsert` helper (POST, fall back to PUT on conflict).
+- **README** — added "Automated Setup (Optional)" section + a note on `${...}` placeholders for manual pasters.
+
+### Placeholder variables
+
+| Placeholder | Example value |
+|---|---|
+| `${HARNESS_ACCOUNT_ID}` | `SAn9tg9eRrWyEJyLZ01ibw` |
+| `${HARNESS_ORG}` | `default` |
+| `${HARNESS_PROJECT}` | `pipeline_controls` |
+| `${GITHUB_USERNAME}` | `stephen-w-pracy` |
+| `${GITHUB_REPO}` | `cd-tidbit-pipeline-control-rollback` |
+| `${GITHUB_PAT}` | (secret) |
+| `${DELEGATE_SELECTOR}` | `helm-delegate` |
+
+## API endpoints used (from apidocs.harness.io research)
+
+Base URL `https://app.harness.io`, auth header `x-api-key: <PAT>`.
+
+| Resource | Create | Update | Body |
+|---|---|---|---|
+| Project | `POST /ng/api/projects` | `PUT /ng/api/projects/{id}` | JSON `{project:{…}}` |
+| Connector | `POST /ng/api/connectors` | `PUT /ng/api/connectors` | YAML (id in body) |
+| Secret | `POST /ng/api/v2/secrets` | `PUT /ng/api/v2/secrets/{id}` | JSON `{secret:{…value…}}` |
+| Service | `POST /ng/api/servicesV2` | `PUT /ng/api/servicesV2` | YAML |
+| Environment | `POST /ng/api/environmentsV2` | `PUT …` | YAML |
+| Infrastructure | `POST /ng/api/infrastructures` | `PUT …` | YAML (`environmentRef` in body) |
+| Pipeline | `POST /pipeline/api/pipelines/v2` | `PUT …/{id}` | YAML (`application/yaml`) |
+| Input Set | `POST /pipeline/api/inputSets` | `PUT …/{id}` | YAML (needs `pipelineIdentifier`) |
+| Delegate token | `GET /ng/api/delegate-token-ng?name=default_token` | — | value field |
+
+## Verification gaps (smoke-test before production run)
+
+These could not be fully confirmed from the API docs in-session; the script uses
+established usage patterns. Test against a scratch project first:
+
+1. **Connectors via `application/yaml`** — JSON `{connector:{…}}` wrapper is documented; raw-YAML works in practice. Fallback to JSON if a connector call fails.
+2. **Pipeline + Input Set `Content-Type`** — used `application/yaml` (established pattern); not confirmed from the spec excerpt.
+3. **Delegate-token endpoint returns unredacted `value`** — only when the API key has delegate-edit permission.
+
+## Open decision
+
+Add a `--dry-run` flag to `setup.sh` that prints each curl command + rendered
+body instead of executing? (Recommended — makes the script self-verifying and
+helps learners debug.) Otherwise, smoke-test manually against a scratch project.
+
+## Verification checklist
+
+- [x] `envsubst` render produces valid YAML, no stray `${...}`
+- [ ] Run `setup.sh` against a fresh Harness project; confirm all resources created
+- [ ] Run the pipeline with dev-only and full-release input sets end-to-end
+- [ ] Re-run `setup.sh` to confirm idempotency (no duplicate errors)
+
+## Files changed
+
+- `.harness/*.yaml`, `.harness/inputsets/*.yaml` — normalized IDs + `${VAR}` placeholders
+- `.env.example` (new)
+- `scripts/setup.sh` (new)
+- `README.md` — automated-setup section + placeholder note
+
+## Deferred (separate tasks)
+
+- Update `specs/build.md` + `specs/corrections.md` stale expressions (`<+artifacts.primary.*>`, `image_name`/`image_tag`, "two registry options")
+- End-to-end tutorial test in a fresh account
+- Final screenshots (clean v1/v2/v3)
+- Record video; add video link to README; merge PR #2

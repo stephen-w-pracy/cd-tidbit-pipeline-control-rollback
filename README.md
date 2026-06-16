@@ -40,6 +40,7 @@ k8s/
     dev-only.yaml              # Deploys to Dev only
     full-release.yaml          # Deploys to Dev and Prod
 scripts/
+  setup.sh                     # Automated provisioning (Harness + cluster + delegate)
   validate-setup.sh            # Pre-flight environment checks
   teardown.sh                  # Resource cleanup
 docs/
@@ -54,6 +55,31 @@ docs/
 - A GitHub account (for forking this repo and as a container registry via GHCR)
 - A GitHub Personal Access Token (classic) with `write:packages` and `repo` scopes
 - Permissions to run pipelines and trigger rollbacks in Harness
+- Either permission to **create a Harness project**, or an existing org + project you can write resources into
+
+## Automated Setup (Optional)
+
+If you'd rather not click through the manual steps below, `scripts/setup.sh`
+provisions everything for you: the Harness project (optional), secret,
+connectors, service, environments, infrastructures, pipeline, and input sets —
+plus your cluster namespaces, the GHCR image pull secret, and a Harness Delegate
+via Helm.
+
+```bash
+cp .env.example .env     # fill in your account ID, API key, GitHub details
+./scripts/setup.sh
+```
+
+The script reads `.env` (gitignored), renders the templated YAML in `.harness/`,
+and creates each resource via the Harness API. It's re-runnable — existing
+resources are updated rather than duplicated. Set `CREATE_PROJECT=false` in
+`.env` to target an existing org/project instead of creating one.
+
+Requirements: `curl`, `kubectl`, `helm`, and `envsubst` (part of `gettext`).
+
+> **Prefer to understand each piece?** The manual steps below create the same
+> resources one at a time. They're also the fallback if the script hits a
+> permission or environment issue.
 
 ## Setup
 
@@ -193,17 +219,23 @@ The ConfigMap is part of the Service manifests (not applied as a separate step),
 so Harness versions it alongside the Deployment. A rolling deploy or rollback
 carries both forward and back together.
 
+> **Note on placeholders.** The YAML files in `.harness/` contain `${...}`
+> placeholders (e.g. `${HARNESS_ORG}`, `${GITHUB_USERNAME}`) used by the
+> automated setup script. If you paste these files manually, replace each
+> placeholder with your own value first. Harness expressions like `<+env.name>`
+> are **not** placeholders — leave them as-is.
+
 ### 10. Create the Pipeline
 
 1. In your project, go to **Pipelines → Create a Pipeline**
-2. Switch to the **YAML** editor and paste the contents of `.harness/pipeline.yaml`
-3. Update the `connectorRef` and `repo` values in the Build step to match your connector name and GHCR image path
+2. Switch to the **YAML** editor and paste the contents of `.harness/pipeline.yaml` (substituting the `${...}` placeholders)
+3. Confirm the `connectorRef` and `repo` values in the Build step match your connector and GHCR image path
 4. Save
 
 ### 11. Create Input Sets
 
 1. Go to your pipeline → **Input Sets → New Input Set**
-2. Switch to the **YAML** editor and paste the contents of `.harness/inputsets/dev-only.yaml`
+2. Switch to the **YAML** editor and paste the contents of `.harness/inputsets/dev-only.yaml` (substituting the `${...}` placeholders)
 3. Save, then repeat for `.harness/inputsets/full-release.yaml`
 
 ---

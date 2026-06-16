@@ -3,5 +3,5 @@ environment:
   identifier: Prod
   tags: {}
   type: Production
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}

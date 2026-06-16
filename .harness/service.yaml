@@ -1,8 +1,8 @@
 service:
   name: pipeline-controls-demo
   identifier: pipelinecontrolsdemo
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}
   serviceDefinition:
     spec:
       manifests:

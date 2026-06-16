@@ -3,5 +3,5 @@ environment:
   identifier: Dev
   tags: {}
   type: PreProduction
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}

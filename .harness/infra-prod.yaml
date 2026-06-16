@@ -1,8 +1,8 @@
 infrastructureDefinition:
   name: Prod_Infra
   identifier: Prod_Infra
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}
   environmentRef: Prod
   deploymentType: Kubernetes
   type: KubernetesDirect

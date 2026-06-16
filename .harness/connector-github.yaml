@@ -1,24 +1,24 @@
 connector:
   name: pipeline-demo-github
   identifier: github
-  description: Steve's connector for the pipeline controls tidbit
-  accountIdentifier: SAn9tg9eRrWyEJyLZ01ibw
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  description: GitHub connector for the pipeline controls tidbit
+  accountIdentifier: ${HARNESS_ACCOUNT_ID}
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}
   type: Github
   spec:
-    url: https://github.com/stephen-w-pracy/cd-tidbit-pipeline-control-rollback
+    url: https://github.com/${GITHUB_USERNAME}/${GITHUB_REPO}
     authentication:
       type: Http
       spec:
         type: UsernameToken
         spec:
-          username: stephen-w-pracy
-          tokenRef: stephen-w-pracy-ghcr-token
+          username: ${GITHUB_USERNAME}
+          tokenRef: ghcr_token
     apiAccess:
       type: Token
       spec:
-        tokenRef: stephen-w-pracy-ghcr-token
+        tokenRef: ghcr_token
     executeOnDelegate: false
     proxy: false
     ignoreTestConnection: false
