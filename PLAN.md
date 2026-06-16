@@ -61,11 +61,14 @@ established usage patterns. Test against a scratch project first:
 2. **Pipeline + Input Set `Content-Type`** — used `application/yaml` (established pattern); not confirmed from the spec excerpt.
 3. **Delegate-token endpoint returns unredacted `value`** — only when the API key has delegate-edit permission.
 
-## Open decision
+## Dry-run flag (done)
 
-Add a `--dry-run` flag to `setup.sh` that prints each curl command + rendered
-body instead of executing? (Recommended — makes the script self-verifying and
-helps learners debug.) Otherwise, smoke-test manually against a scratch project.
+`setup.sh --dry-run` prints each API request (method, URL, content-type,
+rendered YAML/JSON body) and each cluster/Helm command without executing
+anything. Secrets (GitHub PAT, Harness API key, delegate token) are redacted in
+the printed output. `--help` prints the header usage block. Verified: all 13
+resources render with placeholders resolved, no secret literals leak, and
+non-secret `value:` fields (e.g. `target_envs`) are left intact.
 
 ## Verification checklist
 

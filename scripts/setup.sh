@@ -13,8 +13,23 @@
 # Usage:
 #   cp .env.example .env      # then fill in your values
 #   ./scripts/setup.sh
+#   ./scripts/setup.sh --dry-run   # print every API call and command; change nothing
 #
 set -euo pipefail
+
+# --- Parse args ---
+DRY_RUN=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    -h|--help)
+      # Print only the leading header comment block (skip shebang, stop at the
+      # first non-comment line).
+      awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
+      exit 0 ;;
+    *) echo "Unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
 
 # --- Locate repo root (script lives in scripts/) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,11 +62,22 @@ done
 [ ${#missing[@]} -eq 0 ] || die "Missing required .env values: ${missing[*]}"
 CREATE_PROJECT="${CREATE_PROJECT:-true}"
 
+if [ "$DRY_RUN" = true ]; then
+  echo "### DRY RUN — no API calls, kubectl, or helm commands will be executed. ###"
+fi
+
 # --- Check dependencies ---
 step "Checking dependencies"
 for tool in curl envsubst kubectl helm; do
   command -v "$tool" &>/dev/null && ok "$tool" || die "$tool not found — please install it"
 done
+
+# Mask secret *values* before printing anything in dry-run mode. We redact the
+# literal secrets themselves (not fields named "value" — target_envs uses that
+# key and is not a secret).
+redact() {
+  sed -E "s|${GITHUB_PAT}|<GITHUB_PAT>|g; s|${HARNESS_API_KEY}|<HARNESS_API_KEY>|g"
+}
 
 # Variables exposed to envsubst. Restricting the list means Harness expressions
 # like <+env.name> and ${anything-else} are left untouched.
@@ -67,6 +93,17 @@ render() { envsubst "$ENVSUBST_VARS" < "$1"; }
 # Echoes the HTTP status code to stderr (for logging) and the body to stdout.
 api_send() {
   local method="$1" url="$2" ctype="$3" data="$4"
+  if [ "$DRY_RUN" = true ]; then
+    {
+      echo "    curl -X $method '$url'"
+      echo "      -H 'x-api-key: <REDACTED>' -H 'Content-Type: $ctype'"
+      echo "      --data-binary <<<"
+      printf '%s\n' "$data" | redact | sed 's/^/        /'
+    } >&2
+    # Emit a synthetic 200 so upsert reports success without a network call.
+    printf '\n200'
+    return 0
+  fi
   curl -sS -X "$method" "$url" \
     -H "x-api-key: $HARNESS_API_KEY" \
     -H "Content-Type: $ctype" \
@@ -122,6 +159,11 @@ fi
 # --- Cluster prep -------------------------------------------------------------
 step "Cluster: namespaces and image pull secrets"
 for ns in web-dev web-prod; do
+  if [ "$DRY_RUN" = true ]; then
+    info "would ensure namespace $ns"
+    info "would create/apply secret ghcr-cred in $ns (docker-registry, server=ghcr.io, username=$GITHUB_USERNAME, password=<GITHUB_PAT>)"
+    continue
+  fi
   kubectl get ns "$ns" &>/dev/null && ok "namespace $ns exists" \
     || { kubectl create namespace "$ns" >/dev/null && ok "namespace $ns created"; }
   # imagePullSecret for private GHCR. --dry-run | apply makes it idempotent.
@@ -135,7 +177,14 @@ done
 
 # --- Delegate -----------------------------------------------------------------
 step "Harness Delegate (Helm)"
-if kubectl get pods -A -l app.kubernetes.io/name=harness-delegate-ng 2>/dev/null | grep -q Running; then
+if [ "$DRY_RUN" = true ]; then
+  info "would check for a running harness-delegate-ng pod; if none:"
+  info "  GET $BASE_URL/ng/api/delegate-token-ng?$ACCT&name=default_token  (to read delegate token)"
+  info "  helm upgrade --install harness-delegate harness-delegate/harness-delegate-ng \\"
+  info "    --namespace harness-delegate --create-namespace --set delegateName=$DELEGATE_NAME \\"
+  info "    --set accountId=$HARNESS_ACCOUNT_ID --set delegateToken=<REDACTED> \\"
+  info "    --set managerEndpoint=$BASE_URL --set delegateCustomTags=$DELEGATE_SELECTOR"
+elif kubectl get pods -A -l app.kubernetes.io/name=harness-delegate-ng 2>/dev/null | grep -q Running; then
   ok "a Harness delegate is already running — skipping install"
 else
   info "fetching default delegate token"

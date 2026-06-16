@@ -67,8 +67,13 @@ via Helm.
 
 ```bash
 cp .env.example .env     # fill in your account ID, API key, GitHub details
-./scripts/setup.sh
+./scripts/setup.sh --dry-run   # preview every API call and command (changes nothing)
+./scripts/setup.sh             # provision for real
 ```
+
+Use `--dry-run` first to review exactly what will be created — it prints each
+API request, rendered YAML body, and cluster/Helm command, with secrets
+redacted, without touching your account or cluster.
 
 The script reads `.env` (gitignored), renders the templated YAML in `.harness/`,
 and creates each resource via the Harness API. It's re-runnable — existing
