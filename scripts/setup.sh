@@ -206,16 +206,17 @@ done
 step "Harness Delegate (Helm)"
 if [ "$DRY_RUN" = true ]; then
   info "would check for a running harness-delegate-ng pod; if none:"
-  info "  GET $BASE_URL/ng/api/delegate-token-ng?$ACCT&name=default_token  (to read delegate token)"
+  info "  GET $BASE_URL/ng/api/delegate-token-ng?$ACCT&$ORG&$PROJ&name=default_token  (to read delegate token)"
   info "  helm upgrade --install harness-delegate harness-delegate/harness-delegate-ng \\"
-  info "    --namespace harness-delegate --create-namespace --set delegateName=$DELEGATE_NAME \\"
+  info "    --namespace harness-delegate --create-namespace --force-conflicts \\"
+  info "    --set delegateName=$DELEGATE_NAME \\"
   info "    --set accountId=$HARNESS_ACCOUNT_ID --set delegateToken=<REDACTED> \\"
   info "    --set managerEndpoint=$BASE_URL --set delegateCustomTags=$DELEGATE_SELECTOR"
 elif kubectl get pods -A -l "harness.io/name=$DELEGATE_NAME" --field-selector=status.phase=Running 2>/dev/null | grep -q "$DELEGATE_NAME"; then
   ok "a Harness delegate '$DELEGATE_NAME' is already running — skipping install"
 else
   info "fetching default delegate token"
-  tok_resp="$(curl -sS "$BASE_URL/ng/api/delegate-token-ng?$ACCT&name=default_token" \
+  tok_resp="$(curl -sS "$BASE_URL/ng/api/delegate-token-ng?$ACCT&$ORG&$PROJ&name=default_token" \
     -H "x-api-key: $HARNESS_API_KEY")"
   DELEGATE_TOKEN="$(printf '%s' "$tok_resp" | grep -o '"value":"[^"]*"' | head -n1 | sed 's/"value":"//;s/"//')"
   [ -n "$DELEGATE_TOKEN" ] || die "Could not read default delegate token value. Ensure your API key has delegate-edit permission, or install the delegate manually (see README)."
@@ -224,9 +225,11 @@ else
   helm repo update harness-delegate >/dev/null 2>&1 || true
   # The Harness delegate-upgrader sidecar takes ownership of the container
   # image field once the delegate self-updates, so subsequent helm upgrades
-  # report a field-manager conflict. --force re-applies cleanly in that case.
+  # report a field-manager conflict. On Helm 4 (server-side apply by default)
+  # --force-conflicts overrides those conflicts; --force is rejected as
+  # incompatible with SSA. --force-conflicts also works on Helm 3.13+.
   if ! helm upgrade --install harness-delegate harness-delegate/harness-delegate-ng \
-      --namespace harness-delegate --create-namespace --force \
+      --namespace harness-delegate --create-namespace --force-conflicts \
       --set delegateName="$DELEGATE_NAME" \
       --set accountId="$HARNESS_ACCOUNT_ID" \
       --set delegateToken="$DELEGATE_TOKEN" \
