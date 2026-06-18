@@ -80,7 +80,7 @@ and creates each resource via the Harness API. It's re-runnable — existing
 resources are updated rather than duplicated. Set `CREATE_PROJECT=false` in
 `.env` to target an existing org/project instead of creating one.
 
-Requirements: `curl`, `kubectl`, `helm`, and `envsubst` (part of `gettext`).
+Requirements: `curl`, `kubectl`, `helm`, `jq`, `yq`, and `envsubst` (part of `gettext`).
 
 > **Prefer to understand each piece?** The manual steps below create the same
 > resources one at a time. They're also the fallback if the script hits a

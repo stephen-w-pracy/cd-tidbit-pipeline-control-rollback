@@ -52,14 +52,23 @@ Base URL `https://app.harness.io`, auth header `x-api-key: <PAT>`.
 | Input Set | `POST /pipeline/api/inputSets` | `PUT …/{id}` | YAML (needs `pipelineIdentifier`) |
 | Delegate token | `GET /ng/api/delegate-token-ng?name=default_token` | — | value field |
 
-## Verification gaps (smoke-test before production run)
+## Verification gaps (resolved against live API)
 
-These could not be fully confirmed from the API docs in-session; the script uses
-established usage patterns. Test against a scratch project first:
+Verified end-to-end against a real Harness account; the contract differs by
+endpoint family:
 
-1. **Connectors via `application/yaml`** — JSON `{connector:{…}}` wrapper is documented; raw-YAML works in practice. Fallback to JSON if a connector call fails.
-2. **Pipeline + Input Set `Content-Type`** — used `application/yaml` (established pattern); not confirmed from the spec excerpt.
-3. **Delegate-token endpoint returns unredacted `value`** — only when the API key has delegate-edit permission.
+| Endpoint | Content-Type | Body shape |
+|---|---|---|
+| `/ng/api/v2/secrets` | `application/json` | `{secret:{…}}` |
+| `/ng/api/connectors` | `application/json` | `{connector:{…}}` (raw YAML → **HTTP 415**) |
+| `/ng/api/servicesV2`, `/environmentsV2`, `/infrastructures` | `application/json` | `{…ids, type, yaml: "<entity yaml>"}` |
+| `/pipeline/api/pipelines/v2`, `/inputSets` | `application/yaml` | raw YAML |
+
+Connectors are converted YAML → JSON with `yq -o=json`; CD entities are wrapped
+in a JSON envelope built by `jq` from the rendered YAML and the entity's
+identifiers. Pipeline and input-set endpoints take YAML directly. The
+delegate-token endpoint returns an unredacted `value` field when the API key
+has delegate-edit permission.
 
 ## Dry-run flag (done)
 
@@ -73,9 +82,10 @@ non-secret `value:` fields (e.g. `target_envs`) are left intact.
 ## Verification checklist
 
 - [x] `envsubst` render produces valid YAML, no stray `${...}`
-- [ ] Run `setup.sh` against a fresh Harness project; confirm all resources created
+- [x] Run `setup.sh` against a real Harness project; all 13 resources created
+- [x] Re-run `setup.sh` to confirm idempotency (POST → PUT fallback works for every resource)
 - [ ] Run the pipeline with dev-only and full-release input sets end-to-end
-- [ ] Re-run `setup.sh` to confirm idempotency (no duplicate errors)
+- [ ] Re-run from a fully empty project (current run reused existing resources for some lines)
 
 ## Files changed
 

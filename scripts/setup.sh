@@ -68,7 +68,7 @@ fi
 
 # --- Check dependencies ---
 step "Checking dependencies"
-for tool in curl envsubst kubectl helm; do
+for tool in curl envsubst kubectl helm jq yq; do
   command -v "$tool" &>/dev/null && ok "$tool" || die "$tool not found — please install it"
 done
 
@@ -87,6 +87,33 @@ ENVSUBST_VARS='${HARNESS_ACCOUNT_ID} ${HARNESS_ORG} ${HARNESS_PROJECT} ${GITHUB_
 
 # Render a templated file to stdout (only our named vars are substituted).
 render() { envsubst "$ENVSUBST_VARS" < "$1"; }
+
+# The Harness NG API is not uniform about request bodies:
+#   - /ng/api/connectors          wants JSON: the connector YAML converted to a
+#                                 {"connector":{...}} object (raw YAML → HTTP 415).
+#   - /ng/api/servicesV2,         want JSON: a flat object carrying the entity
+#     environmentsV2, infrastructures   YAML as a "yaml" string field.
+#   - /pipeline/api/* (pipeline,  accept raw YAML with Content-Type
+#     input sets)                 application/yaml.
+# These helpers build the first two shapes from a rendered template.
+
+# render_connector_json <file> — convert rendered connector YAML to JSON.
+render_connector_json() { render "$1" | yq -o=json; }
+
+# render_entity_json <file> <key=value>... — wrap rendered entity YAML in the
+# JSON envelope the CD endpoints expect (yaml field + top-level identifiers).
+render_entity_json() {
+  local file="$1"; shift
+  local y; y="$(render "$file")"
+  local args=(--arg yaml "$y")
+  local filter='{yaml: $yaml'
+  for kv in "$@"; do
+    args+=(--arg "${kv%%=*}" "${kv#*=}")
+    filter+=", ${kv%%=*}: \$${kv%%=*}"
+  done
+  filter+='}'
+  jq -n "${args[@]}" "$filter"
+}
 
 # --- API helper ---------------------------------------------------------------
 # api_send <method> <url> <content-type> <data>
@@ -184,8 +211,8 @@ if [ "$DRY_RUN" = true ]; then
   info "    --namespace harness-delegate --create-namespace --set delegateName=$DELEGATE_NAME \\"
   info "    --set accountId=$HARNESS_ACCOUNT_ID --set delegateToken=<REDACTED> \\"
   info "    --set managerEndpoint=$BASE_URL --set delegateCustomTags=$DELEGATE_SELECTOR"
-elif kubectl get pods -A -l app.kubernetes.io/name=harness-delegate-ng 2>/dev/null | grep -q Running; then
-  ok "a Harness delegate is already running — skipping install"
+elif kubectl get pods -A -l "harness.io/name=$DELEGATE_NAME" --field-selector=status.phase=Running 2>/dev/null | grep -q "$DELEGATE_NAME"; then
+  ok "a Harness delegate '$DELEGATE_NAME' is already running — skipping install"
 else
   info "fetching default delegate token"
   tok_resp="$(curl -sS "$BASE_URL/ng/api/delegate-token-ng?$ACCT&name=default_token" \
@@ -195,14 +222,20 @@ else
 
   helm repo add harness-delegate https://app.harness.io/storage/harness-download/delegate-helm-chart/ >/dev/null 2>&1 || true
   helm repo update harness-delegate >/dev/null 2>&1 || true
-  helm upgrade --install harness-delegate harness-delegate/harness-delegate-ng \
-    --namespace harness-delegate --create-namespace \
-    --set delegateName="$DELEGATE_NAME" \
-    --set accountId="$HARNESS_ACCOUNT_ID" \
-    --set delegateToken="$DELEGATE_TOKEN" \
-    --set managerEndpoint="$BASE_URL" \
-    --set "delegateCustomTags=$DELEGATE_SELECTOR" >/dev/null
-  ok "delegate installed (tag: $DELEGATE_SELECTOR) — it may take a minute to register"
+  # The Harness delegate-upgrader sidecar takes ownership of the container
+  # image field once the delegate self-updates, so subsequent helm upgrades
+  # report a field-manager conflict. --force re-applies cleanly in that case.
+  if ! helm upgrade --install harness-delegate harness-delegate/harness-delegate-ng \
+      --namespace harness-delegate --create-namespace --force \
+      --set delegateName="$DELEGATE_NAME" \
+      --set accountId="$HARNESS_ACCOUNT_ID" \
+      --set delegateToken="$DELEGATE_TOKEN" \
+      --set managerEndpoint="$BASE_URL" \
+      --set "delegateCustomTags=$DELEGATE_SELECTOR" >/dev/null 2>&1; then
+    warn "helm upgrade failed — if a delegate is already running, this is usually safe to ignore. Check 'helm list -n harness-delegate' and 'kubectl get pods -n harness-delegate'."
+  else
+    ok "delegate installed (tag: $DELEGATE_SELECTOR) — it may take a minute to register"
+  fi
 fi
 
 # --- Secret -------------------------------------------------------------------
@@ -217,35 +250,45 @@ upsert "Secret ghcr_token" \
   "$BASE_URL/ng/api/v2/secrets/ghcr_token?$ACCT&$ORG&$PROJ" \
   "application/json" "$secret_json"
 
-# Connectors: API takes a JSON wrapper, but accepts the connector spec inline.
-# We send YAML rendered into the connector field via the connector YAML endpoint.
+# Connectors: JSON body ({"connector":{...}}), built from the YAML template.
 for c in connector-github connector-ghcr connector-k8s; do
   upsert "Connector $c" \
     "$BASE_URL/ng/api/connectors?$ACCT" \
     "$BASE_URL/ng/api/connectors?$ACCT" \
-    "application/yaml" \
-    "$(render "$HARNESS_DIR/$c.yaml")"
+    "application/json" \
+    "$(render_connector_json "$HARNESS_DIR/$c.yaml")"
 done
 
-# Service / Environments / Infrastructures / Pipeline / Input Sets all accept
-# YAML when sent with Content-Type: application/yaml.
+# Service / Environments / Infrastructures: JSON envelope carrying the entity
+# YAML as a "yaml" string field, alongside the top-level identifiers.
 upsert "Service pipeline-controls-demo" \
   "$BASE_URL/ng/api/servicesV2?$ACCT" \
   "$BASE_URL/ng/api/servicesV2?$ACCT" \
-  "application/yaml" "$(render "$HARNESS_DIR/service.yaml")"
+  "application/json" \
+  "$(render_entity_json "$HARNESS_DIR/service.yaml" \
+      identifier=pipelinecontrolsdemo name=pipeline-controls-demo \
+      orgIdentifier="$HARNESS_ORG" projectIdentifier="$HARNESS_PROJECT")"
 
-for e in environment-dev environment-prod; do
-  upsert "Environment $e" \
+for e in dev:Dev:PreProduction prod:Prod:Production; do
+  file="environment-${e%%:*}"; id="$(echo "$e" | cut -d: -f2)"; etype="${e##*:}"
+  upsert "Environment $id" \
     "$BASE_URL/ng/api/environmentsV2?$ACCT" \
     "$BASE_URL/ng/api/environmentsV2?$ACCT" \
-    "application/yaml" "$(render "$HARNESS_DIR/$e.yaml")"
+    "application/json" \
+    "$(render_entity_json "$HARNESS_DIR/$file.yaml" \
+        identifier="$id" name="$id" type="$etype" \
+        orgIdentifier="$HARNESS_ORG" projectIdentifier="$HARNESS_PROJECT")"
 done
 
-for i in infra-dev infra-prod; do
-  upsert "Infrastructure $i" \
+for i in dev:Dev_Infra:Dev prod:Prod_Infra:Prod; do
+  file="infra-${i%%:*}"; id="$(echo "$i" | cut -d: -f2)"; envref="${i##*:}"
+  upsert "Infrastructure $id" \
     "$BASE_URL/ng/api/infrastructures?$ACCT" \
     "$BASE_URL/ng/api/infrastructures?$ACCT" \
-    "application/yaml" "$(render "$HARNESS_DIR/$i.yaml")"
+    "application/json" \
+    "$(render_entity_json "$HARNESS_DIR/$file.yaml" \
+        identifier="$id" name="$id" type=KubernetesDirect environmentRef="$envref" \
+        orgIdentifier="$HARNESS_ORG" projectIdentifier="$HARNESS_PROJECT")"
 done
 
 upsert "Pipeline pipeline_controls_exemplar" \
