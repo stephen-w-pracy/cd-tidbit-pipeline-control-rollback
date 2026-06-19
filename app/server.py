@@ -19,11 +19,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return f.read()
         return os.environ.get("PAGE_CONTENT", DEFAULT_PAGE)
 
-    def log_message(self, format, *args):
+    def log_message(self, format, *args):  # noqa: ARG002
         pass
 
 
 if __name__ == "__main__":
-    server = http.server.HTTPServer(("", PORT), Handler)
+    server = http.server.ThreadingHTTPServer(("", PORT), Handler)
     print(f"Serving on port {PORT}")
     server.serve_forever()
