@@ -1,19 +1,19 @@
 connector:
-  name: stephen-w-pracy-ghcr
-  identifier: stephenwpracyghcr
+  name: ghcr
+  identifier: ghcr
   description: ""
-  accountIdentifier: SAn9tg9eRrWyEJyLZ01ibw
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  accountIdentifier: ${HARNESS_ACCOUNT_ID}
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}
   type: DockerRegistry
   spec:
-    dockerRegistryUrl: https://ghcr.io/stephen-w-pracy
+    dockerRegistryUrl: https://ghcr.io/${GITHUB_USERNAME}
     providerType: Other
     auth:
       type: UsernamePassword
       spec:
-        username: stephen-w-pracy
-        passwordRef: stephen-w-pracy-ghcr-token
+        username: ${GITHUB_USERNAME}
+        passwordRef: ghcr_token
     executeOnDelegate: false
     proxy: false
     ignoreTestConnection: false

@@ -1,8 +1,8 @@
 pipeline:
   name: Pipeline Controls Exemplar
   identifier: pipeline_controls_exemplar
-  projectIdentifier: stephenrollbackcontrols
-  orgIdentifier: default
+  projectIdentifier: ${HARNESS_PROJECT}
+  orgIdentifier: ${HARNESS_ORG}
   tags: {}
   variables:
     - name: target_envs
@@ -34,8 +34,8 @@ pipeline:
                   name: Build and Push
                   identifier: Build_and_Push
                   spec:
-                    connectorRef: stephenwpracyghcr
-                    repo: ghcr.io/stephen-w-pracy/pipeline-controls-demo
+                    connectorRef: ghcr
+                    repo: ghcr.io/${GITHUB_USERNAME}/pipeline-controls-demo
                     tags:
                       - <+pipeline.variables.app_version>
                     dockerfile: app/Dockerfile

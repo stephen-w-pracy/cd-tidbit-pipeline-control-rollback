@@ -41,6 +41,11 @@ All documentation (README, specs, video script) must stay in parity. See `specs/
 - `specs/video.md` — Video production script (5 acts, one control per act arc).
 - `specs/corrections.md` — Verified correctness fixes and design decisions, with doc citations.
 
+### Navigation Aids (read these first)
+- `docs/resource-map.md` — The `.harness/`/`k8s/` identifier graph (who references whom) and which templating engine (`${VAR}` envsubst / `<+...>` Harness / `{{.Values}}` Go) owns each token. Start here before tracing a reference or changing an ID.
+- `docs/placeholders.md` — Canonical `${VAR}` → `.env` key → consuming-files table, with render-verification commands. Supersedes the partial table in `PLAN.md`.
+- `docs/parity-matrix.md` — Maps each control/golden-path run to its README anchor, `script.md` act, `specs/video.md` act, and `specs/build.md` section, plus a change-impact checklist. Consult before editing demo steps to know what else must change.
+
 ## Common Commands
 
 ```bash

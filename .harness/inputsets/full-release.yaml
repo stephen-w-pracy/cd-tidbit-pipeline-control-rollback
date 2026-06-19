@@ -1,8 +1,8 @@
 inputSet:
   name: Full Release
   identifier: full_release
-  orgIdentifier: default
-  projectIdentifier: stephenrollbackcontrols
+  orgIdentifier: ${HARNESS_ORG}
+  projectIdentifier: ${HARNESS_PROJECT}
   tags: {}
   pipeline:
     identifier: pipeline_controls_exemplar
