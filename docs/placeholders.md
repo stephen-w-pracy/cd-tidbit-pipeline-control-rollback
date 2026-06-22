@@ -48,8 +48,9 @@ These drive the script's behavior but are not substituted into any `.harness/` f
    `<+artifact.image>`, `<+input>`, `<+INFRA_KEY_SHORT_ID>`, etc. use angle
    brackets and are resolved by Harness at run/deploy time — never by envsubst.
    See [resource-map.md §3](resource-map.md#3-templating-layers--who-resolves-what).
-3. **Identifiers are not templated.** Resource identifiers (`ghcr`,
-   `ghcr_token`, `pipelinecontrolsdemo`, …) are fixed and account-independent.
+3. **Identifiers are not templated.** Resource identifiers
+   (`pipelinedemoghcr`, `ghcr_token`, `pipelinecontrolsdemo`, …) are fixed and
+   account-independent.
    Only display values, URLs, and account/org/project/username are placeholders.
 4. **Manual pasters must substitute by hand.** Anyone pasting `.harness/` YAML
    into the Harness UI instead of running `setup.sh` must replace each `${...}`

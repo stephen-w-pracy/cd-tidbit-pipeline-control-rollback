@@ -41,10 +41,14 @@ k8s/
     full-release.yaml          # Deploys to Dev and Prod
 scripts/
   setup.sh                     # Automated provisioning (Harness + cluster + delegate)
+  cleanup.sh                   # Tears everything down (Harness project + cluster + GHCR package)
+  port-forward.sh              # Foreground port-forward to Dev (8080) and Prod (8081)
   validate-setup.sh            # Pre-flight environment checks
-  teardown.sh                  # Resource cleanup
 docs/
-  colima-zscaler-tls-fix.md   # TLS fix for corporate proxy environments
+  colima-zscaler-tls-fix.md    # TLS fix for corporate proxy environments
+  resource-map.md              # Identifier graph + templating-layer ownership
+  placeholders.md              # ${VAR} → .env → consuming-files table
+  parity-matrix.md             # README ↔ scripts ↔ specs cross-reference
 ```
 
 ## Prerequisites
@@ -122,7 +126,7 @@ See [Install Delegate](https://developer.harness.io/docs/platform/delegates/inst
 In your Harness project:
 
 1. Go to **Connectors → New Connector → Kubernetes Cluster**
-2. Name: `k8s-cluster`
+2. Name: `pipeline-demo-cluster`
 3. Connection method: **Use a Harness Delegate** → select the delegate you just installed
 4. Test the connection and save
 
@@ -147,7 +151,7 @@ This connector allows the Build stage to push images to GitHub Container Registr
 
 1. Go to **Connectors → New Connector → Docker Registry**
 2. Configure:
-   - Name: `container-registry`
+   - Name: `pipeline-demo-ghcr`
    - Provider Type: **Other**
    - Docker Registry URL: `https://ghcr.io/<your-username>`
    - Authentication: **Username and Password** — use your GitHub username and the same PAT secret
@@ -197,7 +201,7 @@ Create two Environments in your Harness project:
 For each Environment, create an Infrastructure Definition:
 - Name: `Dev_Infra` / `Prod_Infra`
 - Infrastructure Type: **Kubernetes**
-- Connector: select `k8s-cluster`
+- Connector: select `pipeline-demo-cluster`
 - Namespace: `web-dev` for Dev, `web-prod` for Prod
 - **Release Name**: leave at the default `release-<+INFRA_KEY_SHORT_ID>`. This gives each environment a unique, stable release name that Harness uses to track versions and roll back correctly.
 
@@ -398,10 +402,39 @@ kubectl get deploy,po -n web-prod
 # Check which image is running
 kubectl get po -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.containers[0].image}{"\n"}{end}' -n web-prod
 
-# Port-forward to view the page
+# Port-forward to view the page (recommended — auto-reconnects when pods rotate)
+make port-forward          # Dev → http://127.0.0.1:8080  Prod → http://127.0.0.1:8081
+
+# Or one environment at a time:
 kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
 kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
 ```
+
+`make port-forward` runs in the foreground and reconnects automatically each
+time the pipeline rolls out a new pod (or a rollback rotates them back). Ctrl-C
+stops both forwards cleanly.
+
+---
+
+## Cleanup
+
+When you're done with the tutorial, `scripts/cleanup.sh` undoes everything
+`setup.sh` created:
+
+```bash
+./scripts/cleanup.sh --dry-run   # preview every DELETE; change nothing
+./scripts/cleanup.sh             # interactive — type 'yes' to confirm
+./scripts/cleanup.sh -y          # skip the prompt
+```
+
+It deletes the Harness project (cascading to all child resources), the
+`web-dev` and `web-prod` cluster namespaces, the Harness Delegate (helm
+uninstall + namespace delete), and the GHCR package. Re-runnable: missing
+items are skipped, not errored.
+
+> **GHCR package delete needs the `delete:packages` scope.** If your PAT only
+> has `write:packages`, you'll see a 403 — add the scope, or delete the
+> package manually in GitHub → Packages.
 
 ---
 

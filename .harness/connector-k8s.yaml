@@ -1,7 +1,9 @@
 connector:
-  name: k8s-cluster
-  identifier: k8scluster
+  name: pipeline-demo-cluster
+  identifier: pipelinedemocluster
   description: ""
+  tags:
+    pipeline-demo: ""
   accountIdentifier: ${HARNESS_ACCOUNT_ID}
   orgIdentifier: ${HARNESS_ORG}
   projectIdentifier: ${HARNESS_PROJECT}

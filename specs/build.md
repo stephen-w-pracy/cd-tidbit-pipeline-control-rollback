@@ -81,8 +81,10 @@ tidbits-pipeline-controls/
 │       ├── dev-only.yaml           # Deploys to Dev only
 │       └── full-release.yaml       # Deploys to Dev and Prod
 ├── scripts/
-│   ├── validate-setup.sh           # Pre-flight environment checks
-│   └── teardown.sh                 # Resource cleanup
+│   ├── setup.sh                    # Automated provisioning
+│   ├── cleanup.sh                  # Tears everything down (Harness + cluster + GHCR)
+│   ├── port-forward.sh             # Foreground port-forward to Dev + Prod
+│   └── validate-setup.sh           # Pre-flight environment checks
 └── specs/
     ├── build.md                    # This spec
     ├── video.md                    # Video production script
@@ -160,9 +162,9 @@ The learner must create these in their Harness project:
 | Resource              | Name (suggested)            | Purpose                                      |
 | ---                   | ---                         | ---                                          |
 | Delegate              | `pipeline-controls-delegate`| Runs in K8s cluster, executes pipeline steps |
-| Kubernetes Connector  | `k8s-cluster`               | Points to the learner's cluster via Delegate |
-| Docker Connector      | `container-registry`        | Push/pull images (GHCR or Docker Hub)        |
-| GitHub Connector      | `github`                    | Fetch pipeline YAML and K8s manifests        |
+| Kubernetes Connector  | `pipeline-demo-cluster`     | Points to the learner's cluster via Delegate |
+| Docker Connector      | `pipeline-demo-ghcr`        | Push/pull images (GHCR or Docker Hub)        |
+| GitHub Connector      | `pipeline-demo-github`      | Fetch pipeline YAML and K8s manifests        |
 | Service               | `pipeline-controls-demo`    | K8s service definition with manifests + values + artifact |
 | Environment (Dev)     | `Dev`                       | Pre-Production, namespace `web-dev`; name must match `Dev.yaml` |
 | Environment (Prod)    | `Prod`                      | Production, namespace `web-prod`; name must match `Prod.yaml` |

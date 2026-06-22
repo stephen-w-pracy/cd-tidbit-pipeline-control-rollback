@@ -1,7 +1,8 @@
 environment:
   name: Dev
   identifier: Dev
-  tags: {}
+  tags:
+    pipeline-demo: ""
   type: PreProduction
   orgIdentifier: ${HARNESS_ORG}
   projectIdentifier: ${HARNESS_PROJECT}

@@ -97,6 +97,8 @@ non-secret `value:` fields (e.g. `target_envs`) are left intact.
 ## Deferred (separate tasks)
 
 - Update `specs/build.md` + `specs/corrections.md` stale expressions (`<+artifacts.primary.*>`, `image_name`/`image_tag`, "two registry options")
+- **Fix `scripts/validate-setup.sh`** — line 49 uses `app.kubernetes.io/name=harness-delegate-ng` (chart name), which doesn't match the chart's actual labels. Same bug `setup.sh` had until today's commit. Switch to `harness.io/name=$DELEGATE_NAME` (read from `.env`).
+- **Investigate delegate auto-upgrade failure** — the in-cluster `pipeline-controls-delegate-upgrader-job` cronjob runs hourly and tries to roll the delegate to image `26.06.89303`, which fails its startup probe (HTTP 500 on `/api/health`) on this Colima cluster. Rolling back to revision 1 (image `26.02.88404`) restores health, but the upgrader will retry. Likely Colima resource limit or probe timing; out of scope for the demo.
 - End-to-end tutorial test in a fresh account
 - Final screenshots (clean v1/v2/v3)
 - Record video; add video link to README; merge PR #2
