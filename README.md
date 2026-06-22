@@ -57,7 +57,7 @@ docs/
 - `kubectl` configured to access your cluster
 - A Harness account (free tier works) — [sign up](https://app.harness.io/auth/#/signup)
 - A GitHub account (for forking this repo and as a container registry via GHCR)
-- A GitHub Personal Access Token (classic) with `write:packages` and `repo` scopes
+- A GitHub Personal Access Token (classic) with these scopes: `repo`, `write:packages`, `delete:packages`
 - Permissions to run pipelines and trigger rollbacks in Harness
 - Either permission to **create a Harness project**, or an existing org + project you can write resources into
 
