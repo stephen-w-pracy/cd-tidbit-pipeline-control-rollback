@@ -442,6 +442,11 @@ items are skipped, not errored.
 
 ## Troubleshooting
 
+**Build stage fails with 429 Too Many Requests**
+The web application is built from a Python base image in a public registry.
+Sometimes public registries throttle requests. Wait a few minutes and re-run
+the pipeline.
+
 **Build stage fails with registry auth errors**
 Verify your GHCR connector credentials. The PAT needs `write:packages` scope.
 Ensure the connector URL includes your username: `https://ghcr.io/<your-username>`.
