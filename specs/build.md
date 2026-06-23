@@ -1,4 +1,4 @@
-# Pipeline Controls Exemplar - Build Spec (Draft)
+# Pipeline Controls Demo - Build Spec (Draft)
 
 This spec describes the learner instructions, the script of a 10–15 minute
 Tidbits video, and an accompanying, reproducible repo that demonstrates four

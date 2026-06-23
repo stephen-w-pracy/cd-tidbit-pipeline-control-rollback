@@ -18,7 +18,7 @@ listed where they diverge.
 
 | Resource | File | `identifier` | `name` |
 |---|---|---|---|
-| Pipeline | `.harness/pipeline.yaml` | `pipeline_controls_exemplar` | Pipeline Controls Exemplar |
+| Pipeline | `.harness/pipeline.yaml` | `pipelinecontrols` | Pipeline Controls Demo |
 | Service | `.harness/service.yaml` | `pipelinecontrolsdemo` | pipeline-controls-demo |
 | Secret | `.harness/ghcr-token-secret.yaml` | `ghcr_token` | ghcr_token |
 | GitHub connector | `.harness/connector-github.yaml` | `github` | pipeline-demo-github |
@@ -44,7 +44,7 @@ listed where they diverge.
 ## 2. Reference graph (who points at whom)
 
 ```
-pipeline.yaml (pipeline_controls_exemplar)
+pipeline.yaml (pipelinecontrols)
 ├─ properties.ci.codebase.connectorRef ──────────► github            (connector)
 ├─ Build step
 │  └─ connectorRef ──────────────────────────────► pipelinedemoghcr  (connector)
@@ -86,7 +86,7 @@ infra-prod.yaml (Prod_Infra)
    namespace: web-prod
 
 inputsets/dev-only.yaml (dev_only) & full-release.yaml (full_release)
-├─ pipeline.identifier ──────────────────────────► pipeline_controls_exemplar
+├─ pipeline.identifier ──────────────────────────► pipelinecontrols
 ├─ variables: target_envs = "dev"  /  "dev,prod"
 ├─ Deploy_to_Dev  → environmentRef Dev,  infra Dev_Infra
 └─ Deploy_to_Prod → environmentRef Prod, infra Prod_Infra

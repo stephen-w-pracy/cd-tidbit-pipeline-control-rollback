@@ -1,6 +1,6 @@
 pipeline:
-  name: Pipeline Controls Exemplar
-  identifier: pipeline_controls_exemplar
+  name: Pipeline Controls Demo
+  identifier: pipelinecontrols
   projectIdentifier: ${HARNESS_PROJECT}
   orgIdentifier: ${HARNESS_ORG}
   tags:

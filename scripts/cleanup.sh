@@ -119,13 +119,13 @@ PROJ="projectIdentifier=$HARNESS_PROJECT"
 
 # --- 1. Pipeline + input sets ----------------------------------------------
 step "Harness pipeline & input sets"
-PIPE="pipelineIdentifier=pipeline_controls_exemplar"
+PIPE="pipelineIdentifier=pipelinecontrols"
 for is in dev_only full_release; do
   api_delete "Input set $is" \
     "$BASE_URL/pipeline/api/inputSets/$is?$ACCT&$ORG&$PROJ&$PIPE"
 done
-api_delete "Pipeline pipeline_controls_exemplar" \
-  "$BASE_URL/pipeline/api/pipelines/pipeline_controls_exemplar?$ACCT&$ORG&$PROJ"
+api_delete "Pipeline pipelinecontrols" \
+  "$BASE_URL/pipeline/api/pipelines/pipelinecontrols?$ACCT&$ORG&$PROJ"
 
 # --- 2. Infrastructures, environments, service -----------------------------
 step "Harness infra, environments, service"
