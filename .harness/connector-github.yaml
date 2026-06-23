@@ -2,6 +2,8 @@ connector:
   name: pipeline-demo-github
   identifier: github
   description: GitHub connector for the pipeline controls tidbit
+  tags:
+    pipeline-demo: ""
   accountIdentifier: ${HARNESS_ACCOUNT_ID}
   orgIdentifier: ${HARNESS_ORG}
   projectIdentifier: ${HARNESS_PROJECT}

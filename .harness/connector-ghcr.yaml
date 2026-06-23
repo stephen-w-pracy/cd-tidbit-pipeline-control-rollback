@@ -1,7 +1,9 @@
 connector:
-  name: ghcr
-  identifier: ghcr
+  name: pipeline-demo-ghcr
+  identifier: pipelinedemoghcr
   description: ""
+  tags:
+    pipeline-demo: ""
   accountIdentifier: ${HARNESS_ACCOUNT_ID}
   orgIdentifier: ${HARNESS_ORG}
   projectIdentifier: ${HARNESS_PROJECT}

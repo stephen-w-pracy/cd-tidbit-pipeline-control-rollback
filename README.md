@@ -1,4 +1,4 @@
-# Pipeline Controls Exemplar — Build, Deploy, Rollback
+# CD Pipeline Controls — Build, Deploy, Rollback
 
 This repository accompanies a Technical Tidbit video. It provides a reproducible
 demo you can run in your own Harness account and Kubernetes cluster to practice
@@ -41,10 +41,14 @@ k8s/
     full-release.yaml          # Deploys to Dev and Prod
 scripts/
   setup.sh                     # Automated provisioning (Harness + cluster + delegate)
+  cleanup.sh                   # Tears everything down (Harness project + cluster + GHCR package)
+  port-forward.sh              # Foreground port-forward to Dev (8080) and Prod (8081)
   validate-setup.sh            # Pre-flight environment checks
-  teardown.sh                  # Resource cleanup
 docs/
-  colima-zscaler-tls-fix.md   # TLS fix for corporate proxy environments
+  colima-zscaler-tls-fix.md    # TLS fix for corporate proxy environments
+  resource-map.md              # Identifier graph + templating-layer ownership
+  placeholders.md              # ${VAR} → .env → consuming-files table
+  parity-matrix.md             # README ↔ scripts ↔ specs cross-reference
 ```
 
 ## Prerequisites
@@ -53,7 +57,7 @@ docs/
 - `kubectl` configured to access your cluster
 - A Harness account (free tier works) — [sign up](https://app.harness.io/auth/#/signup)
 - A GitHub account (for forking this repo and as a container registry via GHCR)
-- A GitHub Personal Access Token (classic) with `write:packages` and `repo` scopes
+- A GitHub Personal Access Token (classic) with these scopes: `repo`, `write:packages`, `delete:packages`
 - Permissions to run pipelines and trigger rollbacks in Harness
 - Either permission to **create a Harness project**, or an existing org + project you can write resources into
 
@@ -122,7 +126,7 @@ See [Install Delegate](https://developer.harness.io/docs/platform/delegates/inst
 In your Harness project:
 
 1. Go to **Connectors → New Connector → Kubernetes Cluster**
-2. Name: `k8s-cluster`
+2. Name: `pipeline-demo-cluster`
 3. Connection method: **Use a Harness Delegate** → select the delegate you just installed
 4. Test the connection and save
 
@@ -147,7 +151,7 @@ This connector allows the Build stage to push images to GitHub Container Registr
 
 1. Go to **Connectors → New Connector → Docker Registry**
 2. Configure:
-   - Name: `container-registry`
+   - Name: `pipeline-demo-ghcr`
    - Provider Type: **Other**
    - Docker Registry URL: `https://ghcr.io/<your-username>`
    - Authentication: **Username and Password** — use your GitHub username and the same PAT secret
@@ -197,7 +201,7 @@ Create two Environments in your Harness project:
 For each Environment, create an Infrastructure Definition:
 - Name: `Dev_Infra` / `Prod_Infra`
 - Infrastructure Type: **Kubernetes**
-- Connector: select `k8s-cluster`
+- Connector: select `pipeline-demo-cluster`
 - Namespace: `web-dev` for Dev, `web-prod` for Prod
 - **Release Name**: leave at the default `release-<+INFRA_KEY_SHORT_ID>`. This gives each environment a unique, stable release name that Harness uses to track versions and roll back correctly.
 
@@ -286,6 +290,12 @@ The golden path below exercises all four controls. Each pipeline run advances th
 version by one. We use **v1**, **v2**, **v3** as examples — substitute your actual
 numbers.
 
+> [!NOTE]
+> The version numbers are derived from the pipeline's execution sequence id
+> (`v<+pipeline.sequenceId>`). Your first run in a fresh project will be `v1`,
+> but if you've run the pipeline during setup you'll see higher numbers. That's
+> expected.
+
 ### Step 1 — Dev Only: deploy v1, skip Prod
 
 1. Go to your pipeline and click **Run**
@@ -298,11 +308,25 @@ numbers.
 - Deploy to Dev succeeds
 - Deploy to Prod is **skipped** (conditional execution: `"dev".contains("prod")` is false)
 
-Verify Dev is live:
+Verify Dev is live using the utility script:
 ```bash
-kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
-# Visit http://localhost:8080
+make port-forward-dev
+# Or, if you prefer to forward manually:
+# kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
 ```
+
+> [!NOTE]
+>
+> `make port-forward-dev` runs in the foreground and reconnects the service
+> automatically each time the pipeline rolls out a new pod in the `web-dev`
+> namespace (or a rollback rotates them back). Ctrl-C stops forwards cleanly.
+>
+> `make port-forward-prod` does the same for the production service in `web-prod`.
+> `make port-forward` forwards both services simultaneously.
+
+
+Visit [http://localhost:8080](http://localhost:8080) in your browser. You
+should see the page with a blue badge and the version number `v1`:
 
 ![Dev app showing v1 with blue badge](readme-assets/app-dev.jpg)
 
@@ -316,13 +340,24 @@ kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
 - Deploy to Dev succeeds
 - Deploy to Prod **runs** (conditional execution: `"dev,prod".contains("prod")` is true)
 
-Verify Prod is live:
+Verify Dev and Prod are now at `v2`:
+
 ```bash
-kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
-# Visit http://localhost:8081
+make port-forward
+# Or, if you prefer to forward manually:
+# kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
+# kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
 ```
 
-![Prod app showing version with green badge](readme-assets/app-prod.jpg)
+Visit [http://localhost:8080](http://localhost:8080) in your browser. You
+should see the page with a blue badge and the version number `v2`:
+
+![Dev app showing v2 with blue badge](readme-assets/app-dev.jpg)
+
+Visit [http://localhost:8081](http://localhost:8081) in your browser. You
+should see the page with a green badge and the version number `v2`:
+
+![Prod app showing v1 with green badge](readme-assets/app-prod.jpg)
 
 The version and image on the page are execution-time variables — the sequence id
 computed at run start, and the artifact details resolved during deployment.
@@ -333,7 +368,8 @@ Run **Full Release** one more time. This creates a second successful Prod
 deployment, which is required for rollback (Harness needs a prior release to
 revert to).
 
-Verify Prod now shows v3.
+Visit [http://localhost:8081](http://localhost:8081) in your browser. You
+should see the page with a green badge and the version number `v3`:
 
 ### Step 4 — Post-prod rollback: restore v2
 
@@ -357,17 +393,17 @@ previous release:
 
 ### Step 5 — Confirm v2 is restored
 
-```bash
-kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
-# Visit http://localhost:8081 — shows v2 again
-```
+Visit [http://localhost:8081](http://localhost:8081) in your browser. You
+should see that Prod has returned to `v2`:
 
 ![Prod app reverted to previous version](readme-assets/app-prod-v2.jpg)
 
-Dev remains on v3 — only Prod was rolled back.
+### Step 6 — Confirm Dev is unaffected
 
-> **Note:** Screenshots show example version numbers from a test environment.
-> Your numbers will differ depending on how many times you've run the pipeline.
+Visit [http://localhost:8080](http://localhost:8081) in your browser. You
+should see that Dev has remains at `v3`:
+
+![Dev remains at v3](readme-assets/app-prod-v2.jpg)
 
 ---
 
@@ -388,24 +424,34 @@ environment. If only one release exists, there is nothing to revert to.
 
 ---
 
-## Verification Commands
+## Cleanup
+
+When you're done with the tutorial, `scripts/cleanup.sh` undoes everything
+`setup.sh` created:
 
 ```bash
-# Check deployment status
-kubectl get deploy,po -n web-dev
-kubectl get deploy,po -n web-prod
-
-# Check which image is running
-kubectl get po -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.containers[0].image}{"\n"}{end}' -n web-prod
-
-# Port-forward to view the page
-kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
-kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
+./scripts/cleanup.sh --dry-run   # preview every DELETE; change nothing
+./scripts/cleanup.sh             # interactive — type 'yes' to confirm
+./scripts/cleanup.sh -y          # skip the prompt
 ```
+
+It deletes the Harness project (cascading to all child resources), the
+`web-dev` and `web-prod` cluster namespaces, the Harness Delegate (helm
+uninstall + namespace delete), and the GHCR package. Re-runnable: missing
+items are skipped, not errored.
+
+> **GHCR package delete needs the `delete:packages` scope.** If your PAT only
+> has `write:packages`, you'll see a 403 — add the scope, or delete the
+> package manually in GitHub → Packages.
 
 ---
 
 ## Troubleshooting
+
+**Build stage fails with 429 Too Many Requests**
+The web application is built from a Python base image in a public registry.
+Sometimes public registries throttle requests. Wait a few minutes and re-run
+the pipeline.
 
 **Build stage fails with registry auth errors**
 Verify your GHCR connector credentials. The PAT needs `write:packages` scope.
@@ -436,3 +482,23 @@ deployment.
 **Pipeline import fails**
 Ensure your Git connector can reach your fork. The PAT needs `repo` scope for
 private repos (or the repo must be public).
+
+---
+**Helpful commands for inspecting the cluster**
+
+```bash
+# Check deployment status
+kubectl get deploy,po -n web-dev
+kubectl get deploy,po -n web-prod
+
+# Check which image is running
+kubectl get po -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.containers[0].image}{"\n"}{end}' -n web-prod
+
+# Port-forward to view the page (recommended — auto-reconnects when pods rotate)
+make port-forward          # Dev → http://127.0.0.1:8080  Prod → http://127.0.0.1:8081
+
+# Or one environment at a time:
+kubectl port-forward svc/pipeline-controls-demo 8080:80 -n web-dev
+kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
+```
+

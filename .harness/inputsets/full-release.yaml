@@ -3,9 +3,10 @@ inputSet:
   identifier: full_release
   orgIdentifier: ${HARNESS_ORG}
   projectIdentifier: ${HARNESS_PROJECT}
-  tags: {}
+  tags:
+    pipeline-demo: ""
   pipeline:
-    identifier: pipeline_controls_exemplar
+    identifier: pipelinecontrols
     variables:
       - name: target_envs
         value: "dev,prod"

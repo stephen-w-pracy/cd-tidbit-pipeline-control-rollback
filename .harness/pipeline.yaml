@@ -1,9 +1,10 @@
 pipeline:
-  name: Pipeline Controls Exemplar
-  identifier: pipeline_controls_exemplar
+  name: Pipeline Controls Demo
+  identifier: pipelinecontrols
   projectIdentifier: ${HARNESS_PROJECT}
   orgIdentifier: ${HARNESS_ORG}
-  tags: {}
+  tags:
+    pipeline-demo: ""
   variables:
     - name: target_envs
       type: String
@@ -34,7 +35,7 @@ pipeline:
                   name: Build and Push
                   identifier: Build_and_Push
                   spec:
-                    connectorRef: ghcr
+                    connectorRef: pipelinedemoghcr
                     repo: ghcr.io/${GITHUB_USERNAME}/pipeline-controls-demo
                     tags:
                       - <+pipeline.variables.app_version>

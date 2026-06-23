@@ -18,12 +18,12 @@ listed where they diverge.
 
 | Resource | File | `identifier` | `name` |
 |---|---|---|---|
-| Pipeline | `.harness/pipeline.yaml` | `pipeline_controls_exemplar` | Pipeline Controls Exemplar |
+| Pipeline | `.harness/pipeline.yaml` | `pipelinecontrols` | Pipeline Controls Demo |
 | Service | `.harness/service.yaml` | `pipelinecontrolsdemo` | pipeline-controls-demo |
 | Secret | `.harness/ghcr-token-secret.yaml` | `ghcr_token` | ghcr_token |
 | GitHub connector | `.harness/connector-github.yaml` | `github` | pipeline-demo-github |
-| GHCR connector | `.harness/connector-ghcr.yaml` | `ghcr` | ghcr |
-| K8s connector | `.harness/connector-k8s.yaml` | `k8scluster` | k8s-cluster |
+| GHCR connector | `.harness/connector-ghcr.yaml` | `pipelinedemoghcr` | pipeline-demo-ghcr |
+| K8s connector | `.harness/connector-k8s.yaml` | `pipelinedemocluster` | pipeline-demo-cluster |
 | Dev environment | `.harness/environment-dev.yaml` | `Dev` | Dev |
 | Prod environment | `.harness/environment-prod.yaml` | `Prod` | Prod |
 | Dev infra | `.harness/infra-dev.yaml` | `Dev_Infra` | Dev_Infra |
@@ -44,10 +44,10 @@ listed where they diverge.
 ## 2. Reference graph (who points at whom)
 
 ```
-pipeline.yaml (pipeline_controls_exemplar)
+pipeline.yaml (pipelinecontrols)
 ├─ properties.ci.codebase.connectorRef ──────────► github            (connector)
 ├─ Build step
-│  └─ connectorRef ──────────────────────────────► ghcr              (connector)
+│  └─ connectorRef ──────────────────────────────► pipelinedemoghcr  (connector)
 │     repo: ghcr.io/${GITHUB_USERNAME}/pipeline-controls-demo
 ├─ Deploy_to_Dev
 │  ├─ service.serviceRef ─────────────────────────► pipelinecontrolsdemo (service)
@@ -69,24 +69,24 @@ connector-github.yaml (github)
 ├─ authentication…tokenRef ──────────────────────► ghcr_token        (secret)
 └─ apiAccess.spec.tokenRef ──────────────────────► ghcr_token        (secret)
 
-connector-ghcr.yaml (ghcr)
+connector-ghcr.yaml (pipelinedemoghcr)
 └─ auth.spec.passwordRef ────────────────────────► ghcr_token        (secret)
 
-connector-k8s.yaml (k8scluster)
+connector-k8s.yaml (pipelinedemocluster)
 └─ delegateSelectors[] = ${DELEGATE_SELECTOR}      (matches delegate tag)
 
 infra-dev.yaml (Dev_Infra)
-├─ environmentRef ───────────────────────────────► Dev               (environment)
-└─ spec.connectorRef ────────────────────────────► k8scluster        (connector)
+├─ environmentRef ───────────────────────────────► Dev                  (environment)
+└─ spec.connectorRef ────────────────────────────► pipelinedemocluster  (connector)
    namespace: web-dev
 
 infra-prod.yaml (Prod_Infra)
-├─ environmentRef ───────────────────────────────► Prod              (environment)
-└─ spec.connectorRef ────────────────────────────► k8scluster        (connector)
+├─ environmentRef ───────────────────────────────► Prod                 (environment)
+└─ spec.connectorRef ────────────────────────────► pipelinedemocluster  (connector)
    namespace: web-prod
 
 inputsets/dev-only.yaml (dev_only) & full-release.yaml (full_release)
-├─ pipeline.identifier ──────────────────────────► pipeline_controls_exemplar
+├─ pipeline.identifier ──────────────────────────► pipelinecontrols
 ├─ variables: target_envs = "dev"  /  "dev,prod"
 ├─ Deploy_to_Dev  → environmentRef Dev,  infra Dev_Infra
 └─ Deploy_to_Prod → environmentRef Prod, infra Prod_Infra
@@ -157,7 +157,7 @@ deploy stage (Dev or Prod)
 **"What references identifier X?"** — see §2 graph. The commonly-confused ones:
 - `ghcr_token` ← github connector (×2), ghcr connector.
 - `github` connector ← service (manifest store + artifact source), pipeline (codebase).
-- `k8scluster` ← infra-dev, infra-prod.
+- `pipelinedemocluster` ← infra-dev, infra-prod.
 - `pipelinecontrolsdemo` (service) ← both deploy stages' `serviceRef`.
 
 **"Which file feeds this `${VAR}`?"** — see [placeholders.md](placeholders.md).

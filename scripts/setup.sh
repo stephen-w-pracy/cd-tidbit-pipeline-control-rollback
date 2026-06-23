@@ -294,12 +294,12 @@ for i in dev:Dev_Infra:Dev prod:Prod_Infra:Prod; do
         orgIdentifier="$HARNESS_ORG" projectIdentifier="$HARNESS_PROJECT")"
 done
 
-upsert "Pipeline pipeline_controls_exemplar" \
+upsert "Pipeline pipelinecontrols" \
   "$BASE_URL/pipeline/api/pipelines/v2?$ACCT&$ORG&$PROJ" \
-  "$BASE_URL/pipeline/api/pipelines/v2/pipeline_controls_exemplar?$ACCT&$ORG&$PROJ" \
+  "$BASE_URL/pipeline/api/pipelines/v2/pipelinecontrols?$ACCT&$ORG&$PROJ" \
   "application/yaml" "$(render "$HARNESS_DIR/pipeline.yaml")"
 
-PIPE="pipelineIdentifier=pipeline_controls_exemplar"
+PIPE="pipelineIdentifier=pipelinecontrols"
 for is in dev-only:dev_only full-release:full_release; do
   file="${is%%:*}"; id="${is##*:}"
   upsert "Input Set $file" \

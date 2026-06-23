@@ -29,14 +29,15 @@ All documentation (README, specs, video script) must stay in parity. See `specs/
 - `infra-prod.yaml` — Prod_Infra infrastructure definition (KubernetesDirect, namespace `web-prod`).
 - `connector-github.yaml` — GitHub code connector (Repo type, points at this repo).
 - `connector-ghcr.yaml` — GHCR Docker registry connector (DockerRegistry type).
-- `connector-k8s.yaml` — K8s cluster connector (InheritFromDelegate, selector `helm-delegate`).
+- `connector-k8s.yaml` — K8s cluster connector (InheritFromDelegate, selector from `${DELEGATE_SELECTOR}` in `.env`).
 - `ghcr-token-secret.yaml` — Secret reference for the GitHub PAT used by connectors.
 - `inputsets/dev-only.yaml` — Sets `target_envs: dev`, supplies Dev environment/infra. Prod stage skipped.
 - `inputsets/full-release.yaml` — Sets `target_envs: dev,prod`, supplies both environments/infras.
 
 ### Supporting Files
 - `scripts/validate-setup.sh` — Pre-flight checks (kubectl, cluster, namespaces, delegate).
-- `scripts/teardown.sh` — Deletes deployed resources from both namespaces.
+- `scripts/cleanup.sh` — Tears down the full tutorial: Harness project, cluster namespaces, delegate, and GHCR package. Honors `--dry-run` for preview.
+- `scripts/port-forward.sh` — Foreground port-forward to Dev (8080) and Prod (8081). Auto-reconnects on pod rotation; Ctrl-C cleans both up.
 - `specs/build.md` — Design spec: skill interpretation, learning objectives, decisions, controls/variables tables, resource table.
 - `specs/video.md` — Video production script (5 acts, one control per act arc).
 - `specs/corrections.md` — Verified correctness fixes and design decisions, with doc citations.
@@ -50,11 +51,12 @@ All documentation (README, specs, video script) must stay in parity. See `specs/
 
 ```bash
 make validate          # Run pre-flight checks
-make teardown          # Delete demo resources from cluster
+make cleanup           # Tear down everything setup.sh created (project, namespaces, delegate, GHCR package)
 make build-local       # Build Docker image locally
 make run-local         # Run container locally on port 8080
-make port-forward-dev  # Forward local:8080 to Dev service
-make port-forward-prod # Forward local:8081 to Prod service
+make port-forward      # Foreground port-forward to Dev (8080) + Prod (8081), auto-reconnects on pod rotation
+make port-forward-dev  # Forward local:8080 to Dev service (one-shot)
+make port-forward-prod # Forward local:8081 to Prod service (one-shot)
 ```
 
 ## Key Conventions

@@ -3,6 +3,8 @@ service:
   identifier: pipelinecontrolsdemo
   orgIdentifier: ${HARNESS_ORG}
   projectIdentifier: ${HARNESS_PROJECT}
+  tags:
+    pipeline-demo: ""
   serviceDefinition:
     spec:
       manifests:
