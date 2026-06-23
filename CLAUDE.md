@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A companion repository for a 10–15 minute Harness "Technical Tidbit" video demonstrating four pipeline controls in Harness CD/CI NextGen: **Input Sets, execution-time variables, conditional execution, and post-prod rollback**. These are treated as four coordinate controls shown in the order of a deploy-and-recover cycle (not as three controls analyzed through rollback). The app is a tiny Python HTTP server that displays a version badge and the running image's name/tag — the visual payoff is seeing the page advance across runs and revert on rollback.
 
-All documentation (README, specs, video script) must stay in parity. See `specs/corrections.md` for the verified fixes and design decisions that define the current architecture (especially §0 framing and §5 on execution-time variables).
+All documentation (README, specs, video script) must stay in parity. See `specs/build.md` for the design rationale (skill interpretation, learning objectives, decisions, controls/variables tables) and `docs/parity-matrix.md` for the cross-doc change-impact checklist.
 
 ## Architecture
 
@@ -35,17 +35,18 @@ All documentation (README, specs, video script) must stay in parity. See `specs/
 - `inputsets/full-release.yaml` — Sets `target_envs: dev,prod`, supplies both environments/infras.
 
 ### Supporting Files
+- `scripts/setup.sh` — Automated provisioning: renders `.harness/` templates and creates every Harness resource via the NG REST API, plus cluster namespaces, the GHCR imagePullSecret, and a Helm-installed delegate. Idempotent (POST → PUT on conflict). Honors `--dry-run`.
 - `scripts/validate-setup.sh` — Pre-flight checks (kubectl, cluster, namespaces, delegate).
 - `scripts/cleanup.sh` — Tears down the full tutorial: Harness project, cluster namespaces, delegate, and GHCR package. Honors `--dry-run` for preview.
 - `scripts/port-forward.sh` — Foreground port-forward to Dev (8080) and Prod (8081). Auto-reconnects on pod rotation; Ctrl-C cleans both up.
 - `specs/build.md` — Design spec: skill interpretation, learning objectives, decisions, controls/variables tables, resource table.
-- `specs/video.md` — Video production script (5 acts, one control per act arc).
-- `specs/corrections.md` — Verified correctness fixes and design decisions, with doc citations.
+- `video/script.md` — Narrator script (5 acts), read while performing the on-screen actions.
+- `video/production-spec.md` — Video production reference: act structure, shot lists, key callouts, production notes.
 
 ### Navigation Aids (read these first)
 - `docs/resource-map.md` — The `.harness/`/`k8s/` identifier graph (who references whom) and which templating engine (`${VAR}` envsubst / `<+...>` Harness / `{{.Values}}` Go) owns each token. Start here before tracing a reference or changing an ID.
-- `docs/placeholders.md` — Canonical `${VAR}` → `.env` key → consuming-files table, with render-verification commands. Supersedes the partial table in `PLAN.md`.
-- `docs/parity-matrix.md` — Maps each control/golden-path run to its README anchor, `script.md` act, `specs/video.md` act, and `specs/build.md` section, plus a change-impact checklist. Consult before editing demo steps to know what else must change.
+- `docs/placeholders.md` — Canonical `${VAR}` → `.env` key → consuming-files table, with render-verification commands.
+- `docs/parity-matrix.md` — Maps each control/golden-path run to its README anchor, `video/script.md` act, `video/production-spec.md` act, and `specs/build.md` section, plus a change-impact checklist. Consult before editing demo steps to know what else must change.
 
 ## Common Commands
 
@@ -61,10 +62,10 @@ make port-forward-prod # Forward local:8081 to Prod service (one-shot)
 
 ## Key Conventions
 
-- **Four coordinate controls**: The tidbit demonstrates Input Sets, execution-time variables, conditional execution, and post-prod rollback as four things the learner can *use*, in lifecycle order. Rollback internals are a brief aside, not the spine. (See corrections.md §0.)
-- **Parity**: Changes to README demo steps, pipeline YAML, or video script acts must be reflected across all of them (and in `build.md`).
+- **Four coordinate controls**: The tidbit demonstrates Input Sets, execution-time variables, conditional execution, and post-prod rollback as four things the learner can *use*, in lifecycle order. Rollback internals are a brief aside, not the spine. (See `specs/build.md` "Skill Statement and Interpretation".)
+- **Parity**: Changes to README demo steps, pipeline YAML, or video script acts must be reflected across all of them (and in `build.md`). See `docs/parity-matrix.md` for the cross-doc change-impact checklist.
 - **Same image, different config**: The Docker image is built once. Environments differ only by their values file (`Dev.yaml` / `Prod.yaml`), which drives the ConfigMap content (environment name, accent color, image reference).
-- **Execution-time variables, no prompt**: Demonstrated by `v<+pipeline.sequenceId>` (CI tag + version label) and by artifact expressions (`<+artifact.version>`, `<+artifact.image>`) resolved in the CD stage values files and shown on the page. `executionInput()` was deliberately dropped (corrections.md §5): it adds on-camera timeout/typing risk, and "execution-time variable" is broader than a prompt.
+- **Execution-time variables, no prompt**: Demonstrated by `v<+pipeline.sequenceId>` (CI tag + version label) and by artifact expressions (`<+artifact.version>`, `<+artifact.image>`) resolved in the CD stage values files and shown on the page. `executionInput()` was deliberately dropped: it adds on-camera timeout/typing risk, and "execution-time variable" is broader than a prompt.
 - **ConfigMap is a Service manifest, versioned by Harness**: It is *not* applied as a separate K8sApply step. Keeping it in the Service Manifests means Harness versions it and rewrites the Deployment's reference each release, so pods roll on change and a rolling rollback reverts it. This is what makes the visual payoff reliable.
 - **Go templating + Harness expressions**: All K8s manifests use Go templating (`{{.Values.x}}`). The per-env values files contain Harness expressions (`<+artifact.image>`, `<+artifact.version>`) which Harness resolves before feeding them to the Go template engine. The manifests are *not* valid standalone YAML for `kubectl apply`.
 - **No service variables**: The Service entity has no `variables` block. Display values (`app_version`, `image`) come directly from artifact expressions in the values files, keeping the Service decoupled from any specific pipeline.

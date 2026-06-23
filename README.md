@@ -45,10 +45,14 @@ scripts/
   port-forward.sh              # Foreground port-forward to Dev (8080) and Prod (8081)
   validate-setup.sh            # Pre-flight environment checks
 docs/
-  colima-zscaler-tls-fix.md    # TLS fix for corporate proxy environments
   resource-map.md              # Identifier graph + templating-layer ownership
   placeholders.md              # ${VAR} → .env → consuming-files table
   parity-matrix.md             # README ↔ scripts ↔ specs cross-reference
+specs/
+  build.md                     # Design spec (skill, objectives, decisions, tables)
+video/
+  script.md                    # Narrator script (5 acts)
+  production-spec.md           # Video production reference (shot lists, timings)
 ```
 
 ## Prerequisites
@@ -357,7 +361,7 @@ should see the page with a blue badge and the version number `v2`:
 Visit [http://localhost:8081](http://localhost:8081) in your browser. You
 should see the page with a green badge and the version number `v2`:
 
-![Prod app showing v1 with green badge](readme-assets/app-prod.jpg)
+![Prod app showing v2 with green badge](readme-assets/app-prod.jpg)
 
 The version and image on the page are execution-time variables — the sequence id
 computed at run start, and the artifact details resolved during deployment.
@@ -400,10 +404,10 @@ should see that Prod has returned to `v2`:
 
 ### Step 6 — Confirm Dev is unaffected
 
-Visit [http://localhost:8080](http://localhost:8081) in your browser. You
-should see that Dev has remains at `v3`:
+Visit [http://localhost:8080](http://localhost:8080) in your browser. You
+should see that Dev remains at `v3`:
 
-![Dev remains at v3](readme-assets/app-prod-v2.jpg)
+![Dev remains at v3](readme-assets/app-dev-v3.jpg)
 
 ---
 
@@ -471,8 +475,9 @@ target namespace (see Step 7 above), or make the package public in GitHub.
 
 **x509: certificate signed by unknown authority**
 Your cluster can't verify the registry's TLS certificate. This commonly happens
-with corporate TLS inspection proxies (Zscaler, Netskope). See
-[docs/colima-zscaler-tls-fix.md](docs/colima-zscaler-tls-fix.md) for a Colima-specific fix.
+with corporate TLS inspection proxies (Zscaler, Netskope). Add your corporate
+CA bundle to the cluster's trusted certificates, or switch to a cluster outside
+the inspection path.
 
 **Rollback says "No previous eligible release found"**
 Harness needs at least two successful deployments to the environment before
