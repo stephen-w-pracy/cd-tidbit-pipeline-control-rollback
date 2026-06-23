@@ -290,6 +290,12 @@ The golden path below exercises all four controls. Each pipeline run advances th
 version by one. We use **v1**, **v2**, **v3** as examples — substitute your actual
 numbers.
 
+> [!NOTE]
+> The version numbers are derived from the pipeline's execution sequence id
+> (`v<+pipeline.sequenceId>`). Your first run in a fresh project will be `v1`,
+> but if you've run the pipeline during setup you'll see higher numbers. That's
+> expected.
+
 ### Step 1 — Dev Only: deploy v1, skip Prod
 
 1. Go to your pipeline and click **Run**
