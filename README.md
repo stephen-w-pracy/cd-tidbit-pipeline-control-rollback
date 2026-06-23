@@ -1,17 +1,25 @@
 # CD Pipeline Controls — Build, Deploy, Rollback
 
-This repository accompanies a Technical Tidbit video. It provides a reproducible
-demo you can run in your own Harness account and Kubernetes cluster to practice
-four Harness pipeline controls in a realistic build → deploy → recover workflow.
+This repository accompanies a Technical Tidbit video. It provides a
+reproducible demo you can run in your own Harness account and Kubernetes
+cluster to practice four Harness pipeline controls in a realistic build →
+deploy → recover workflow.
 
 ## What You Will Learn
 
 By the end, you will be able to use four pipeline controls:
 
-1. **Input Sets** — run a pipeline with an Input Set, and switch Input Sets to change what the run does (here: which environments are targeted).
-2. **Execution-time variables** — use values resolved when the run executes rather than authored in advance: the build sequence id as the version/tag, and the image name and version read in the deploy stage from the artifact the build stage produced.
-3. **Conditional execution** — use a stage condition so a stage runs only when a criterion is met (here: deploy to Prod only when the target list includes `prod`).
-4. **Post-prod rollback** — trigger a post-production rollback and confirm the prior version is restored.
+1. **Input Sets** — run a pipeline with an Input Set, and switch Input Sets to
+   change what the run does (here: which environments are targeted).
+2. **Execution-time variables** — use values resolved when the run executes
+   rather than authored in advance: the build sequence id as the version/tag,
+   and the image name and version read in the deploy stage from the artifact
+   the build stage produced.
+3. **Conditional execution** — use a stage condition so a stage runs only when
+   a criterion is met (here: deploy to Prod only when the target list includes
+   `prod`).
+4. **Post-prod rollback** — trigger a post-production rollback and confirm the
+   prior version is restored.
 
 ## Repository Structure
 
@@ -65,16 +73,38 @@ video/
 - Permissions to run pipelines and trigger rollbacks in Harness
 - Either permission to **create a Harness project**, or an existing org + project you can write resources into
 
-## Automated Setup (Optional)
+## Setup
 
-If you'd rather not click through the manual steps below, `scripts/setup.sh`
-provisions everything for you: the Harness project (optional), secret,
-connectors, service, environments, infrastructures, pipeline, and input sets —
-plus your cluster namespaces, the GHCR image pull secret, and a Harness Delegate
-via Helm.
+This repository contains a `scripts/setup.sh` script that provisions everything
+for you using the [Automated](#automated-setup) steps. Alternatively, you can follow
+the [Manual](#manual-setup) steps below. 
+
+Whichever method you choose, you will need the following values:
+
+| Variable                     | Where to find it                                                                                                                  |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| Hrness Account ID            | In the acount URL: <code>https:&#47;&#47;app.harness.io/ng/account/<strong style="color:orange">ACCOUNT_ID</strong>/...</code>    |
+| Harness Org                  | In org URL: <code>https:&#47;&#47;app.harness.io/ng/ACCOUNT_ID/all/orgs/<strong style="color:orange">ORG_ID</strong>/...</code>   |
+| Harness Project              | In the project URL: <code>.../ACCOUNT_ID/all/orgs/ORG_ID/projects/<strong style="color:orange">PROJECT_ID</strong>/...</code>[^1] |
+| Harness PAT                  | In **User profile** -> **My API Keys** -> **<API_KEY>** -> **Tokens**[^2]
+| GitHub username              | For your fork and GHCR
+| GitHub Personal Access Token | Classic token with `repo`, `write:packages`, and `delete:packages` scopes
+
+[^1]: The automated setup can create a Harness project and PAT for you.
+[^2]: You can create a new API key and/or token if you don't have one already or want to use one specifically for this demo.
+
+### Automated Setup
+
+Requirements: `make`, `curl`, `kubectl`, `helm`, `jq`, `yq`, and `envsubst` (part of `gettext`).
+
+`scripts/setup.sh` provisions everything for you: the Harness project
+(optional), secret, connectors, service, environments, infrastructures,
+pipeline, and input sets — plus your cluster namespaces, the GHCR image pull
+secret, and a Harness Delegate via Helm.
+
 
 ```bash
-cp .env.example .env     # fill in your account ID, API key, GitHub details
+cp .env.example .env           # fill in your account ID, API key, GitHub details
 ./scripts/setup.sh --dry-run   # preview every API call and command (changes nothing)
 ./scripts/setup.sh             # provision for real
 ```
@@ -88,13 +118,10 @@ and creates each resource via the Harness API. It's re-runnable — existing
 resources are updated rather than duplicated. Set `CREATE_PROJECT=false` in
 `.env` to target an existing org/project instead of creating one.
 
-Requirements: `curl`, `kubectl`, `helm`, `jq`, `yq`, and `envsubst` (part of `gettext`).
+`scripts/cleanup.sh` reverses the setup: it deletes the Harness project and all
+child resources, the cluster namespaces, and the GHCR package.
 
-> **Prefer to understand each piece?** The manual steps below create the same
-> resources one at a time. They're also the fallback if the script hits a
-> permission or environment issue.
-
-## Setup
+### Manual Setup
 
 ### 1. Fork and Clone This Repository
 
@@ -417,11 +444,11 @@ A post-prod rollback is **not** a re-run of the pipeline with rollback steps
 switched on. It is a *separate execution* that replays the original run's
 already-resolved YAML and runs only the rollback steps.
 
-| Control | Normal run | Post-prod rollback |
-|---------|-----------|--------------------|
-| Input Sets | Merged into the YAML at run start | Not re-applied; the original resolved YAML is replayed |
-| Conditional execution | Evaluated as the run proceeds | Not re-evaluated; the original resolved outcome is replayed |
-| Execution mode | `<+pipeline.executionMode>` = `NORMAL` | `<+pipeline.executionMode>` = `POST_EXECUTION_ROLLBACK` |
+| Control               | Normal run                             | Post-prod rollback                                          |
+|-----------------------|----------------------------------------|-------------------------------------------------------------|
+| Input Sets            | Merged into the YAML at run start      | Not re-applied; the original resolved YAML is replayed      |
+| Conditional execution | Evaluated as the run proceeds          | Not re-evaluated; the original resolved outcome is replayed |
+| Execution mode        | `<+pipeline.executionMode>` = `NORMAL` | `<+pipeline.executionMode>` = `POST_EXECUTION_ROLLBACK`     |
 
 Rollback requires at least **two successful deployments** to the same
 environment. If only one release exists, there is nothing to revert to.
@@ -488,8 +515,7 @@ deployment.
 Ensure your Git connector can reach your fork. The PAT needs `repo` scope for
 private repos (or the repo must be public).
 
----
-**Helpful commands for inspecting the cluster**
+### Helpful commands for inspecting the cluster
 
 ```bash
 # Check deployment status
