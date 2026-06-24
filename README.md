@@ -307,11 +307,9 @@ You're now ready to run the pipeline.
 
 ```mermaid
 flowchart LR
-    A((build)) --> B{"<code>dev</code> in<br/><code>target_envs</code>?"}
-    B -->|yes| C("deploy<br/>dev")
-    B -->|no| D
+    A((build)) --> C("deploy<br/>dev")
     C --> D{"<code>prod</code> in<br/><code>target_envs</code>?"}
-    D -->|yes| E["deploy<br/>prod"] --> F
+    D -->|yes| E("deploy<br/>prod") --> F
     D -->|no| F((("end")))
 
     style A fill:#4f46e5,stroke:#312e81,color:#fff
@@ -321,8 +319,8 @@ flowchart LR
 ```
 
 - **Build**: Builds the container image from `app/Dockerfile` and pushes to GHCR, tagged with `v<+pipeline.sequenceId>`
-- **Deploy to Dev**: Rolls out the Deployment, Service, and versioned ConfigMap to the `web-dev` namespace
-- **Deploy to Prod**: Runs only if `target_envs` includes `prod` (conditional execution). Same rolling deploy to `web-prod`
+- **Deploy to Dev**: Rolls out the Deployment, Service, and versioned ConfigMap to the `web-dev` namespace. Always runs, because there is no condition on the Dev stage.
+- **Deploy to Prod**: Runs only if `target_envs` includes `prod`. Same rolling deploy to `web-prod`
 
 The same container image is deployed to both environments. The HTML page content
 comes from a ConfigMap rendered with Go templating. The values differ per
