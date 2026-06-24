@@ -92,8 +92,8 @@ Whichever method you choose, follow these two steps first.
    | GitHub username              | For your fork and GHCR                                                                                                            |
    | GitHub Personal Access Token | Classic token with `repo`, `write:packages`, and `delete:packages` scopes                                                         |
    
-   [^1]: The automated setup can create a Harness project and PAT for you.
-   [^2]: You can create a new API key and/or token if you don't have one already or want to use one specifically for this demo.
+   [^1]: The automated setup can create a Harness project for you.
+   [^2]: You can create a new API key and/or token if you don't have one already or want to use one specifically for this demo. See [Manage API Keys](https://developer.harness.io/docs/platform/automation/api/add-and-manage-api-keys/) on the Harness Developer Hub for more information.
 
 2. Fork and Clone This Repository
 
