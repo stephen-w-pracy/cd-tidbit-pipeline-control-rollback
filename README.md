@@ -1,17 +1,25 @@
 # CD Pipeline Controls — Build, Deploy, Rollback
 
-This repository accompanies a Technical Tidbit video. It provides a reproducible
-demo you can run in your own Harness account and Kubernetes cluster to practice
-four Harness pipeline controls in a realistic build → deploy → recover workflow.
+This repository accompanies a Technical Tidbit video. It provides a
+reproducible demo you can run in your own Harness account and Kubernetes
+cluster to practice four Harness pipeline controls in a realistic build →
+deploy → recover workflow.
 
 ## What You Will Learn
 
 By the end, you will be able to use four pipeline controls:
 
-1. **Input Sets** — run a pipeline with an Input Set, and switch Input Sets to change what the run does (here: which environments are targeted).
-2. **Execution-time variables** — use values resolved when the run executes rather than authored in advance: the build sequence id as the version/tag, and the image name and version read in the deploy stage from the artifact the build stage produced.
-3. **Conditional execution** — use a stage condition so a stage runs only when a criterion is met (here: deploy to Prod only when the target list includes `prod`).
-4. **Post-prod rollback** — trigger a post-production rollback and confirm the prior version is restored.
+1. **Input Sets** — run a pipeline with an Input Set, and switch Input Sets to
+   change what the run does (here: which environments are targeted).
+2. **Execution-time variables** — use values resolved when the run executes
+   rather than authored in advance: the build sequence id as the version/tag,
+   and the image name and version read in the deploy stage from the artifact
+   the build stage produced.
+3. **Conditional execution** — use a stage condition so a stage runs only when
+   a criterion is met (here: deploy to Prod only when the target list includes
+   `prod`).
+4. **Post-prod rollback** — trigger a post-production rollback and confirm the
+   prior version is restored.
 
 ## Repository Structure
 
@@ -45,10 +53,14 @@ scripts/
   port-forward.sh              # Foreground port-forward to Dev (8080) and Prod (8081)
   validate-setup.sh            # Pre-flight environment checks
 docs/
-  colima-zscaler-tls-fix.md    # TLS fix for corporate proxy environments
   resource-map.md              # Identifier graph + templating-layer ownership
   placeholders.md              # ${VAR} → .env → consuming-files table
   parity-matrix.md             # README ↔ scripts ↔ specs cross-reference
+specs/
+  build.md                     # Design spec (skill, objectives, decisions, tables)
+video/
+  script.md                    # Narrator script (5 acts)
+  production-spec.md           # Video production reference (shot lists, timings)
 ```
 
 ## Prerequisites
@@ -61,47 +73,81 @@ docs/
 - Permissions to run pipelines and trigger rollbacks in Harness
 - Either permission to **create a Harness project**, or an existing org + project you can write resources into
 
-## Automated Setup (Optional)
-
-If you'd rather not click through the manual steps below, `scripts/setup.sh`
-provisions everything for you: the Harness project (optional), secret,
-connectors, service, environments, infrastructures, pipeline, and input sets —
-plus your cluster namespaces, the GHCR image pull secret, and a Harness Delegate
-via Helm.
-
-```bash
-cp .env.example .env     # fill in your account ID, API key, GitHub details
-./scripts/setup.sh --dry-run   # preview every API call and command (changes nothing)
-./scripts/setup.sh             # provision for real
-```
-
-Use `--dry-run` first to review exactly what will be created — it prints each
-API request, rendered YAML body, and cluster/Helm command, with secrets
-redacted, without touching your account or cluster.
-
-The script reads `.env` (gitignored), renders the templated YAML in `.harness/`,
-and creates each resource via the Harness API. It's re-runnable — existing
-resources are updated rather than duplicated. Set `CREATE_PROJECT=false` in
-`.env` to target an existing org/project instead of creating one.
-
-Requirements: `curl`, `kubectl`, `helm`, `jq`, `yq`, and `envsubst` (part of `gettext`).
-
-> **Prefer to understand each piece?** The manual steps below create the same
-> resources one at a time. They're also the fallback if the script hits a
-> permission or environment issue.
-
 ## Setup
 
-### 1. Fork and Clone This Repository
+This repository contains a `scripts/setup.sh` script that provisions everything
+for you using the [Automated](#automated-setup) steps. Alternatively, you can follow
+the [Manual](#manual-setup) steps below. 
 
-Fork this repository to your GitHub account, then clone it locally:
+Whichever method you choose, follow these two steps first.
 
-```bash
-git clone https://github.com/<your-username>/cd-tidbit-pipeline-control-rollback.git
-cd cd-tidbit-pipeline-control-rollback
-```
+1. Collect Required Variable Values
 
-### 2. Install the Harness Delegate
+   | Variable                     | Where to find it                                                                                                                  |
+   |------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+   | Hrness Account ID            | In the acount URL: <code>https:&#47;&#47;app.harness.io/ng/account/<strong style="color:orange">ACCOUNT_ID</strong>/...</code>    |
+   | Harness Org                  | In org URL: <code>https:&#47;&#47;app.harness.io/ng/ACCOUNT_ID/all/orgs/<strong style="color:orange">ORG_ID</strong>/...</code>   |
+   | Harness Project              | In the project URL: <code>.../ACCOUNT_ID/all/orgs/ORG_ID/projects/<strong style="color:orange">PROJECT_ID</strong>/...</code>[^1] |
+   | Harness PAT                  | In **User profile** -> **My API Keys** -> **<API_KEY>** -> **Tokens**[^2]                                                         |
+   | GitHub username              | For your fork and GHCR                                                                                                            |
+   | GitHub Personal Access Token | Classic token with `repo`, `write:packages`, and `delete:packages` scopes                                                         |
+   
+   [^1]: The automated setup can create a Harness project and PAT for you.
+   [^2]: You can create a new API key and/or token if you don't have one already or want to use one specifically for this demo.
+
+2. Fork and Clone This Repository
+
+   Fork this repository to your GitHub account, then clone it locally:
+   
+   ```bash
+   git clone https://github.com/<your-username>/cd-tidbit-pipeline-control-rollback.git
+   cd cd-tidbit-pipeline-control-rollback
+   ```
+
+### Automated Setup
+
+Requirements: `make`, `curl`, `kubectl`, `helm`, `jq`, `yq`, and `envsubst` (part of `gettext`).
+
+`scripts/setup.sh` provisions everything for you: the Harness project
+(optional), secret, connectors, service, environments, infrastructures,
+pipeline, and input sets — plus your cluster namespaces, the GHCR image pull
+secret (your PAT), and a Harness Delegate via Helm.
+
+1. Create a `.env` file from the example and fill in your values:
+
+   ```bash
+   cp .env.example .env          
+   ```
+
+   Edit this file and supply mising the variable values.
+
+2. Dry-run the setup script. It prints each API request, rendered YAML
+   body, and cluster/Helm command, with secrets redacted, without touching your
+   account or cluster.
+
+   ```bash
+   ./scripts/setup.sh --dry-run   
+   ```
+   Review the output to ensure the correct values are being used. If you see
+   any errors, fix them in `.env` and re-run the dry run. 
+
+3. Run the setup script for real. 
+
+   ```bash
+   ./scripts/setup.sh   
+   ```
+
+   The script reads `.env` (gitignored), renders the templated YAML in `.harness/`,
+   and creates each resource via the Harness API. It's re-runnable — existing
+   resources are updated rather than duplicated. Set `CREATE_PROJECT=false` in
+   `.env` to target an existing org/project instead of creating one.
+
+4. Proceed to [How The Pipeline Works](#how-the-pipeline-works) to exercise the
+   pipeline controls.
+
+### Manual Setup
+
+### 1. Install the Harness Delegate
 
 The Delegate is an agent that runs in your cluster and executes pipeline tasks.
 
@@ -117,11 +163,11 @@ helm install harness-delegate harness-delegate/harness-delegate-ng \
   --set managerEndpoint=https://app.harness.io
 ```
 
-Find your Account ID and Delegate Token in **Harness → Account Settings → Account Resources → Delegates → New Delegate**.
+Find your Account ID and Delegate Token in **Project Settings -> Delegates → New Delegate**.
 
 See [Install Delegate](https://developer.harness.io/docs/platform/delegates/install-delegates/overview/) for full options.
 
-### 3. Create a Kubernetes Connector
+### 2. Create a Kubernetes Connector
 
 In your Harness project:
 
@@ -130,7 +176,7 @@ In your Harness project:
 3. Connection method: **Use a Harness Delegate** → select the delegate you just installed
 4. Test the connection and save
 
-### 4. Create a GitHub Connector
+### 3. Create a GitHub Connector
 
 Harness needs access to your fork for both code (pipeline, manifests) and the container registry (GHCR).
 
@@ -145,7 +191,7 @@ Harness needs access to your fork for both code (pipeline, manifests) and the co
 3. Connectivity Mode: **Connect through Harness Platform**
 4. Test and save
 
-### 5. Create a GHCR Connector
+### 4. Create a GHCR Connector
 
 This connector allows the Build stage to push images to GitHub Container Registry.
 
@@ -158,14 +204,14 @@ This connector allows the Build stage to push images to GitHub Container Registr
 3. Connectivity Mode: **Connect through Harness Platform**
 4. Test and save
 
-### 6. Create Kubernetes Namespaces
+### 5. Create Kubernetes Namespaces
 
 ```bash
 kubectl create namespace web-dev
 kubectl create namespace web-prod
 ```
 
-### 7. Create Image Pull Secrets
+### 6. Create Image Pull Secrets
 
 GHCR packages are private by default. Your cluster needs credentials to pull images.
 
@@ -183,9 +229,13 @@ kubectl create secret docker-registry ghcr-cred \
   -n web-prod
 ```
 
-> **Note:** If you make your GHCR package public (in GitHub → Packages → package settings → Danger Zone → Change visibility), you can skip this step. The deployment manifest still references the secret, but Kubernetes will proceed if the secret doesn't exist and the registry allows anonymous pulls.
+> [!NOTE]
+> If you make your GHCR package public (in GitHub → Packages → package settings
+> → Danger Zone → Change visibility), you can skip this step. The deployment
+> manifest still references the secret, but Kubernetes will proceed if the
+> secret doesn't exist and the registry allows anonymous pulls.
 
-### 8. Create Environments and Infrastructure in Harness
+### 7. Create Environments and Infrastructure in Harness
 
 Create two Environments in your Harness project:
 
@@ -194,18 +244,21 @@ Create two Environments in your Harness project:
    - **Dev** — type: Pre-Production
    - **Prod** — type: Production
 
-> **Environment names matter.** The Service selects its values file by
-> environment name (`k8s/<+env.name>.yaml`), so the environments must be named
-> exactly **Dev** and **Prod** to match `k8s/Dev.yaml` and `k8s/Prod.yaml`.
+> [!NOTE]
+> The Service selects its values file by environment name
+> (`k8s/<+env.name>.yaml`), so the environments must be named exactly **Dev**
+> and **Prod** to match `k8s/Dev.yaml` and `k8s/Prod.yaml`.
 
 For each Environment, create an Infrastructure Definition:
 - Name: `Dev_Infra` / `Prod_Infra`
 - Infrastructure Type: **Kubernetes**
 - Connector: select `pipeline-demo-cluster`
 - Namespace: `web-dev` for Dev, `web-prod` for Prod
-- **Release Name**: leave at the default `release-<+INFRA_KEY_SHORT_ID>`. This gives each environment a unique, stable release name that Harness uses to track versions and roll back correctly.
+- **Release Name**: leave at the default `release-<+INFRA_KEY_SHORT_ID>`. This
+  gives each environment a unique, stable release name that Harness uses to
+  track versions and roll back correctly.
 
-### 9. Create a Service in Harness
+### 8. Create a Service in Harness
 
 1. Go to **Services → New Service**
 2. Name: `pipeline-controls-demo`
@@ -228,39 +281,46 @@ The ConfigMap is part of the Service manifests (not applied as a separate step),
 so Harness versions it alongside the Deployment. A rolling deploy or rollback
 carries both forward and back together.
 
-> **Note on placeholders.** The YAML files in `.harness/` contain `${...}`
-> placeholders (e.g. `${HARNESS_ORG}`, `${GITHUB_USERNAME}`) used by the
-> automated setup script. If you paste these files manually, replace each
-> placeholder with your own value first. Harness expressions like `<+env.name>`
-> are **not** placeholders — leave them as-is.
+> [!NOTE] 
+> The YAML files in `.harness/` contain `${...}` placeholders (e.g.
+> `${HARNESS_ORG}`, `${GITHUB_USERNAME}`) used by the automated setup script.
+> If you paste these files manually, replace each placeholder with your own
+> value first. Harness expressions like `<+env.name>` are **not** placeholders
+> and should be left as-is.
 
-### 10. Create the Pipeline
+### 9. Create the Pipeline
 
 1. In your project, go to **Pipelines → Create a Pipeline**
 2. Switch to the **YAML** editor and paste the contents of `.harness/pipeline.yaml` (substituting the `${...}` placeholders)
 3. Confirm the `connectorRef` and `repo` values in the Build step match your connector and GHCR image path
 4. Save
 
-### 11. Create Input Sets
+### 10. Create Input Sets
 
 1. Go to your pipeline → **Input Sets → New Input Set**
 2. Switch to the **YAML** editor and paste the contents of `.harness/inputsets/dev-only.yaml` (substituting the `${...}` placeholders)
 3. Save, then repeat for `.harness/inputsets/full-release.yaml`
 
----
+You're now ready to run the pipeline.
 
 ## How the Pipeline Works
 
-```
-┌─────────┐     ┌──────────────┐     ┌───────────────┐
-│  Build  │────▶│ Deploy to Dev│────▶│ Deploy to Prod│
-│         │     │              │     │ (conditional) │
-└─────────┘     └──────────────┘     └───────────────┘
+```mermaid
+flowchart LR
+    A((build)) --> C("deploy<br/>dev")
+    C --> D{"<code>prod</code> in<br/><code>target_envs</code>?"}
+    D -->|yes| E("deploy<br/>prod") --> F
+    D -->|no| F((("end")))
+
+    style A fill:#4f46e5,stroke:#312e81,color:#fff
+    style C fill:#0891b2,stroke:#164e63,color:#fff
+    style E fill:#16a34a,stroke:#14532d,color:#fff
+    style F fill:#e5e7eb,stroke:#6b7280,color:#111
 ```
 
 - **Build**: Builds the container image from `app/Dockerfile` and pushes to GHCR, tagged with `v<+pipeline.sequenceId>`
-- **Deploy to Dev**: Rolls out the Deployment, Service, and versioned ConfigMap to the `web-dev` namespace
-- **Deploy to Prod**: Runs only if `target_envs` includes `prod` (conditional execution). Same rolling deploy to `web-prod`
+- **Deploy to Dev**: Rolls out the Deployment, Service, and versioned ConfigMap to the `web-dev` namespace. Always runs, because there is no condition on the Dev stage.
+- **Deploy to Prod**: Runs only if `target_envs` includes `prod`. Same rolling deploy to `web-prod`
 
 The same container image is deployed to both environments. The HTML page content
 comes from a ConfigMap rendered with Go templating. The values differ per
@@ -269,26 +329,24 @@ Dev shows a blue badge, Prod shows green.
 
 **The four controls in action:**
 
-| Control | Where | What it does |
-|---------|-------|--------------|
-| Input Sets | `target_envs` variable | Dev Only sets `dev` (Prod skipped); Full Release sets `dev,prod` (Prod runs) |
-| Execution-time variables | `v<+pipeline.sequenceId>`, `<+artifact.version>`, `<+artifact.image>` | Version auto-increments; artifact details flow into the page at deploy time |
-| Conditional execution | Prod stage `when` condition | `target_envs.contains("prod")` gates the Prod deploy |
-| Post-prod rollback | Service → View Instances and Rollback | Reverts Prod to the prior release (image + ConfigMap) |
+| Control                  | Where                                                                 | What it does                                                                 |
+|--------------------------|-----------------------------------------------------------------------|------------------------------------------------------------------------------|
+| Input Sets               | `target_envs` variable                                                | Dev Only sets `dev` (Prod skipped); Full Release sets `dev,prod` (Prod runs) |
+| Execution-time variables | `v<+pipeline.sequenceId>`, `<+artifact.version>`, `<+artifact.image>` | Version auto-increments; artifact details flow into the page at deploy time  |
+| Conditional execution    | Prod stage `when` condition                                           | `target_envs.contains("prod")` gates the Prod deploy                         |
+| Post-prod rollback       | Service → View Instances and Rollback                                 | Reverts Prod to the prior release (image + ConfigMap)                        |
 
 **Version label.** The version shown on the page and used as the image tag is
 derived from the pipeline's execution sequence id (`v<+pipeline.sequenceId>`).
 It increments by one on every run — there is nothing to type. Your first run in
-a fresh project will be `v1`, but if you've run the pipeline during setup you'll
-see higher numbers. That's expected.
-
----
+a fresh project will be `v1`, but if you've run the pipeline during setup
+you'll see higher numbers. That's expected.
 
 ## Run the Demo
 
-The golden path below exercises all four controls. Each pipeline run advances the
-version by one. We use **v1**, **v2**, **v3** as examples — substitute your actual
-numbers.
+The golden path below exercises all four controls. Each pipeline run advances
+the version by one. We use **v1**, **v2**, **v3** as examples — substitute your
+actual numbers.
 
 > [!NOTE]
 > The version numbers are derived from the pipeline's execution sequence id
@@ -309,6 +367,7 @@ numbers.
 - Deploy to Prod is **skipped** (conditional execution: `"dev".contains("prod")` is false)
 
 Verify Dev is live using the utility script:
+
 ```bash
 make port-forward-dev
 # Or, if you prefer to forward manually:
@@ -324,11 +383,10 @@ make port-forward-dev
 > `make port-forward-prod` does the same for the production service in `web-prod`.
 > `make port-forward` forwards both services simultaneously.
 
-
-Visit [http://localhost:8080](http://localhost:8080) in your browser. You
+Visit the development app in your browser: [http://localhost:8080](http://localhost:8080). You
 should see the page with a blue badge and the version number `v1`:
 
-![Dev app showing v1 with blue badge](readme-assets/app-dev.jpg)
+![Dev app showing v1 with blue badge](readme-assets/app-dev-v1.jpg)
 
 ### Step 2 — Full Release: deploy v2 to Dev and Prod
 
@@ -349,15 +407,15 @@ make port-forward
 # kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
 ```
 
-Visit [http://localhost:8080](http://localhost:8080) in your browser. You
+Visit the development app in your browser: [http://localhost:8080](http://localhost:8080). You
 should see the page with a blue badge and the version number `v2`:
 
-![Dev app showing v2 with blue badge](readme-assets/app-dev.jpg)
+![Dev app showing v2 with blue badge](readme-assets/app-dev-v2.jpg)
 
-Visit [http://localhost:8081](http://localhost:8081) in your browser. You
+Visit the production app in your browser: [http://localhost:8081](http://localhost:8081). You
 should see the page with a green badge and the version number `v2`:
 
-![Prod app showing v1 with green badge](readme-assets/app-prod.jpg)
+![Prod app showing v2 with green badge](readme-assets/app-prod-v2.jpg)
 
 The version and image on the page are execution-time variables — the sequence id
 computed at run start, and the artifact details resolved during deployment.
@@ -368,8 +426,15 @@ Run **Full Release** one more time. This creates a second successful Prod
 deployment, which is required for rollback (Harness needs a prior release to
 revert to).
 
-Visit [http://localhost:8081](http://localhost:8081) in your browser. You
+Visit the development app in your browser: [http://localhost:8080](http://localhost:8080). You
+should see the page with a blue badge and the version number `v3`:
+
+![Dev app showing v3 with blue badge](readme-assets/app-dev-v3.jpg)
+
+Visit the production app in your browser: [http://localhost:8081](http://localhost:8081). You
 should see the page with a green badge and the version number `v3`:
+
+![Prod app showing v3 with green badge](readme-assets/app-prod-v3.jpg)
 
 ### Step 4 — Post-prod rollback: restore v2
 
@@ -393,19 +458,17 @@ previous release:
 
 ### Step 5 — Confirm v2 is restored
 
-Visit [http://localhost:8081](http://localhost:8081) in your browser. You
-should see that Prod has returned to `v2`:
+Visit the production app in your browser: [http://localhost:8081](http://localhost:8081). You
+should see the page with a green badge and the version number `v2`:
 
-![Prod app reverted to previous version](readme-assets/app-prod-v2.jpg)
+![Prod app reverted to previous version, v2, with green badge](readme-assets/app-prod-v2.jpg)
 
 ### Step 6 — Confirm Dev is unaffected
 
-Visit [http://localhost:8080](http://localhost:8081) in your browser. You
-should see that Dev has remains at `v3`:
+Visit the development app in your browser: [http://localhost:8080](http://localhost:8080). You
+should see the that Dev remains at `v3`:
 
-![Dev remains at v3](readme-assets/app-prod-v2.jpg)
-
----
+![Dev app showing v3 with blue badge](readme-assets/app-dev-v3.jpg)
 
 ## Good to Know: What a Post-Prod Rollback Actually Is
 
@@ -413,36 +476,78 @@ A post-prod rollback is **not** a re-run of the pipeline with rollback steps
 switched on. It is a *separate execution* that replays the original run's
 already-resolved YAML and runs only the rollback steps.
 
-| Control | Normal run | Post-prod rollback |
-|---------|-----------|--------------------|
-| Input Sets | Merged into the YAML at run start | Not re-applied; the original resolved YAML is replayed |
-| Conditional execution | Evaluated as the run proceeds | Not re-evaluated; the original resolved outcome is replayed |
-| Execution mode | `<+pipeline.executionMode>` = `NORMAL` | `<+pipeline.executionMode>` = `POST_EXECUTION_ROLLBACK` |
+| Control               | Normal run                             | Post-prod rollback                                          |
+|-----------------------|----------------------------------------|-------------------------------------------------------------|
+| Input Sets            | Merged into the YAML at run start      | Not re-applied; the original resolved YAML is replayed      |
+| Conditional execution | Evaluated as the run proceeds          | Not re-evaluated; the original resolved outcome is replayed |
+| Execution mode        | `<+pipeline.executionMode>` = `NORMAL` | `<+pipeline.executionMode>` = `POST_EXECUTION_ROLLBACK`     |
 
 Rollback requires at least **two successful deployments** to the same
 environment. If only one release exists, there is nothing to revert to.
 
----
-
 ## Cleanup
 
-When you're done with the tutorial, `scripts/cleanup.sh` undoes everything
-`setup.sh` created:
+### Automated
 
-```bash
-./scripts/cleanup.sh --dry-run   # preview every DELETE; change nothing
-./scripts/cleanup.sh             # interactive — type 'yes' to confirm
-./scripts/cleanup.sh -y          # skip the prompt
-```
+If you used `scripts/setup.sh` to create the resources for this tutorial, you
+can use `scripts/cleanup.sh` to delete them all.
 
-It deletes the Harness project (cascading to all child resources), the
-`web-dev` and `web-prod` cluster namespaces, the Harness Delegate (helm
-uninstall + namespace delete), and the GHCR package. Re-runnable: missing
-items are skipped, not errored.
+1. Dry-run the cleanup script to preview what it will delete:
 
-> **GHCR package delete needs the `delete:packages` scope.** If your PAT only
-> has `write:packages`, you'll see a 403 — add the scope, or delete the
-> package manually in GitHub → Packages.
+   ```bash
+   ./scripts/cleanup.sh --dry-run
+   ```
+
+2. Run the cleanup script. If you want to run it interactively, remove the `-y`
+   flag:
+
+   ```bash
+   ./scripts/cleanup.sh -y          # YOLO
+   ```
+
+### Manual
+
+#### Harness Resources
+
+Delete the Harness project, which will cascade-delete all child resources.
+
+1. In Harness, navigate to your project
+
+1. In the upper-right corner, click the 3-dot menu and select **Delete**:
+
+   ![Delete project menu](readme-assets/harness-delete-project.jpg)
+
+1. In the confirmation dialog, click **Yes, I want to delete this project** and then type the project name to confirm
+
+#### Cluster Resources
+
+1. Delete the Harness Delegate 
+
+   ```bash
+   helm uninstall harness-delegate -n harness-delegate
+   ```
+
+1. Delete the delegate namespace
+
+   ```bash
+   kubectl delete namespace harness-delegate
+   ```
+
+1. Delete the `web-dev` and `web-prod` namespaces in your cluster
+
+   ```bash
+   kubectl delete namespace web-dev web-prod
+   ```
+
+#### GHCR Package
+
+1. In GitHub, navigate to your main user page
+
+1. In Select the **Packages** tab
+
+1. Select `pipeline-controls-demo`
+
+2. Click **Delete package** and confirm
 
 ---
 
@@ -471,8 +576,9 @@ target namespace (see Step 7 above), or make the package public in GitHub.
 
 **x509: certificate signed by unknown authority**
 Your cluster can't verify the registry's TLS certificate. This commonly happens
-with corporate TLS inspection proxies (Zscaler, Netskope). See
-[docs/colima-zscaler-tls-fix.md](docs/colima-zscaler-tls-fix.md) for a Colima-specific fix.
+with corporate TLS inspection proxies (Zscaler, Netskope). Add your corporate
+CA bundle to the cluster's trusted certificates, or switch to a cluster outside
+the inspection path.
 
 **Rollback says "No previous eligible release found"**
 Harness needs at least two successful deployments to the environment before
@@ -483,8 +589,7 @@ deployment.
 Ensure your Git connector can reach your fork. The PAT needs `repo` scope for
 private repos (or the repo must be public).
 
----
-**Helpful commands for inspecting the cluster**
+### Helpful commands for inspecting the cluster
 
 ```bash
 # Check deployment status

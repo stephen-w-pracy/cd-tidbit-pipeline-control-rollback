@@ -4,6 +4,13 @@ set -euo pipefail
 echo "=== Pipeline Controls — Setup Validator ==="
 echo
 
+# Pick up DELEGATE_NAME from .env if present, so the delegate check below
+# matches what setup.sh actually deployed.
+if [ -f .env ]; then
+  set -a; . ./.env; set +a
+fi
+: "${DELEGATE_NAME:=pipeline-controls-delegate}"
+
 PASS=0
 WARN=0
 FAIL=0
@@ -46,10 +53,10 @@ done
 # Delegate
 echo
 echo "Checking Harness Delegate..."
-if kubectl get pods -A -l app.kubernetes.io/name=harness-delegate-ng 2>/dev/null | grep -q Running; then
-  pass "Harness Delegate running"
+if kubectl get pods -A -l "harness.io/name=$DELEGATE_NAME" --field-selector=status.phase=Running 2>/dev/null | grep -q "$DELEGATE_NAME"; then
+  pass "Harness Delegate '$DELEGATE_NAME' running"
 else
-  warn "No running Harness Delegate found — see README for install instructions"
+  warn "No running Harness Delegate named '$DELEGATE_NAME' found — see README for install instructions"
 fi
 
 # Manifests

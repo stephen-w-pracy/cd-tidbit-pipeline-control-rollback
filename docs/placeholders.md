@@ -5,9 +5,8 @@ comes from (`.env`) and which files consume it. `scripts/setup.sh` renders these
 with `envsubst`, restricted to exactly this variable list so that Harness
 `<+...>` expressions are left untouched.
 
-> This is the canonical version of the partial table in `PLAN.md`. Keep it in
-> sync with `.env.example`, `scripts/setup.sh` (the `ENVSUBST_VARS` list), and
-> the `.harness/` files. Referenced from `CLAUDE.md`.
+> Keep this in sync with `.env.example`, `scripts/setup.sh` (the
+> `ENVSUBST_VARS` list), and the `.harness/` files. Referenced from `CLAUDE.md`.
 
 ---
 

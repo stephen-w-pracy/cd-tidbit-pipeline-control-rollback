@@ -5,11 +5,10 @@ video. It is a production reference — what to show, in what order, and how lon
 each segment should take.
 
 For the narrator's spoken script and step-by-step demonstration actions, see
-[script.md](../script.md) in the repo root.
+[script.md](./script.md).
 
 For the overall demo design, learning objectives, and implementation details,
-see [build.md](./build.md). For verified correctness decisions, see
-[corrections.md](./corrections.md).
+see [build.md](../specs/build.md).
 
 ---
 

@@ -1,7 +1,11 @@
 # Narrator Script — Pipeline Controls Tidbit
 
-Read this aloud while performing the actions described in brackets. Each act maps
-to the production spec in `specs/video.md`.
+Read this aloud while performing the actions described in brackets. Each act
+maps to [production-spec.md](./production-spec.md).
+
+> **Build numbers:** the version numbers below (v1, v2, v3) are illustrative.
+> Read whatever sequence id Harness shows on screen — Act 2 is the first run,
+> Act 3 the second, Act 4 the third.
 
 ---
 
@@ -145,7 +149,7 @@ kubectl port-forward svc/pipeline-controls-demo 8081:80 -n web-prod
 
 ---
 
-## Act 4 — Full Release Again (1–2 min)
+## Act 4 — Full Release Again (2–3 min)
 
 ### Narration
 
