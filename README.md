@@ -85,7 +85,7 @@ Whichever method you choose, follow these two steps first.
 
    | Variable                     | Where to find it                                                                                                                  |
    |------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-   | Hrness Account ID            | In the acount URL: <code>https:&#47;&#47;app.harness.io/ng/account/<strong style="color:orange">ACCOUNT_ID</strong>/...</code>    |
+   | Harness Account ID            | In the acount URL: <code>https:&#47;&#47;app.harness.io/ng/account/<strong style="color:orange">ACCOUNT_ID</strong>/...</code>    |
    | Harness Org                  | In org URL: <code>https:&#47;&#47;app.harness.io/ng/ACCOUNT_ID/all/orgs/<strong style="color:orange">ORG_ID</strong>/...</code>   |
    | Harness Project              | In the project URL: <code>.../ACCOUNT_ID/all/orgs/ORG_ID/projects/<strong style="color:orange">PROJECT_ID</strong>/...</code>[^1] |
    | Harness PAT                  | In **User profile** -> **My API Keys** -> **<API_KEY>** -> **Tokens**[^2]                                                         |
