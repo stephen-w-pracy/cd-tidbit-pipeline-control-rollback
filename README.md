@@ -307,10 +307,17 @@ You're now ready to run the pipeline.
 
 ```mermaid
 flowchart LR
-    Build@{ label: "Build" }
-    Dev@{ label: "Deploy to Dev" }
-    Prod@{ label: "Deploy to Prod (conditional)" }
-    Build --> Dev --> Prod
+    A((build)) --> B{"<code>dev</code> in<br/><code>target_envs</code>?"}
+    B -->|yes| C("deploy<br/>dev")
+    B -->|no| D
+    C --> D{"<code>prod</code> in<br/><code>target_envs</code>?"}
+    D -->|yes| E["deploy<br/>prod"] --> F
+    D -->|no| F((("end")))
+
+    style A fill:#4f46e5,stroke:#312e81,color:#fff
+    style C fill:#0891b2,stroke:#164e63,color:#fff
+    style E fill:#16a34a,stroke:#14532d,color:#fff
+    style F fill:#e5e7eb,stroke:#6b7280,color:#111
 ```
 
 - **Build**: Builds the container image from `app/Dockerfile` and pushes to GHCR, tagged with `v<+pipeline.sequenceId>`
@@ -334,14 +341,14 @@ Dev shows a blue badge, Prod shows green.
 **Version label.** The version shown on the page and used as the image tag is
 derived from the pipeline's execution sequence id (`v<+pipeline.sequenceId>`).
 It increments by one on every run — there is nothing to type. Your first run in
-a fresh project will be `v1`, but if you've run the pipeline during setup you'll
-see higher numbers. That's expected.
+a fresh project will be `v1`, but if you've run the pipeline during setup
+you'll see higher numbers. That's expected.
 
 ## Run the Demo
 
-The golden path below exercises all four controls. Each pipeline run advances the
-version by one. We use **v1**, **v2**, **v3** as examples — substitute your actual
-numbers.
+The golden path below exercises all four controls. Each pipeline run advances
+the version by one. We use **v1**, **v2**, **v3** as examples — substitute your
+actual numbers.
 
 > [!NOTE]
 > The version numbers are derived from the pipeline's execution sequence id
